@@ -3,6 +3,9 @@
 ;; Copyright (C) 2023  Paul D. Nelson
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
+;; Version: 0.1
+;; URL: https://github.com/ultronozm/czm-tex-compile.el
+;; Package-Requires: ((emacs "29.1") (auctex "11.86.1"))
 ;; Keywords: tex
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -24,7 +27,7 @@
 
 ;;; Code:
 
-
+;;;###autoload
 (defun czm-latexmk-this ()
   (interactive)
   (if (string-match "\\([^\.]+\\)\.tex" (buffer-name))
@@ -151,11 +154,13 @@ DIRECTION should be either 'next or 'previous."
 	(goto-line line)))
     (message (or description "No further errors or warnings."))))
 
+;;;###autoload
 (defun czm/latex-previous-log-error ()
   "Move point to the previous LaTeX-warning line."
   (interactive)
   (czm/latex-navigate-log-error 'previous))
 
+;;;###autoload
 (defun czm/latex-next-log-error ()
   "Move point to the next LaTeX-warning line."
   (interactive)
