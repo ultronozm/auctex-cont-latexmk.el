@@ -29,7 +29,7 @@
 ;; `czm-tex-compile-command' to change the command used to compile the
 ;; document.
 ;;
-;; Sample use-package declaration:
+;; My use-package declaration:
 ;;
 ;; (use-package czm-tex-compile
 ;;     :vc (:url "https://github.com/ultronozm/czm-tex-compile.el.git"
@@ -37,8 +37,8 @@
 ;;     :after latex
 ;;     :bind
 ;;     ("C-c k" . czm-tex-compile)
-;;     ("M-]" . czm-tex-compile-next-error)
-;;     ("M-[" . czm-tex-compile-previous-error))
+;;     ("s-]" . czm-tex-compile-next-error)
+;;     ("s-[" . czm-tex-compile-previous-error))
 
 ;;; Code:
 
@@ -82,6 +82,12 @@ Used for navigating LaTeX warnings in the log file."
 	       (point))))
     (replace-regexp-in-string "\n" "" (buffer-substring-no-properties beg end))))
 
+;; TODO: look for the line <name>.bbl in the file, and don't jump to
+;; line numbers found in log entries beyond that point (just display
+;; them).  Also, use insert-file-contents rather than
+;; find-file-noselect, etc.  Similarly, do the same for .aux files in
+;; your other packages (tex-util, preview).
+
 (defun czm-tex-compile--navigate-log-error (direction)
   "Helper function to navigate warnings in the log file.
 DIRECTION should be either \='next or \='previous."
@@ -101,6 +107,8 @@ DIRECTION should be either \='next or \='previous."
 	(goto-char log-pos))
       (let ((search-fn
 	     (if (eq direction 'previous) #'re-search-backward #'re-search-forward)))
+        (when (eq direction 'next)
+          (forward-line 2))
 	(when (funcall search-fn
 		       (concat "^"
 			       (regexp-opt
@@ -126,7 +134,8 @@ DIRECTION should be either \='next or \='previous."
 		      (setq line (cons line-number line-prefix)))))
 	      (when (string-match "input line \\([0-9]+\\)" description)
 		(setq line (string-to-number (match-string 1 description)))))
-	    (forward-line (if (eq direction 'previous) -1 1))
+            (forward-line -1)
+	    ;; (forward-line (if (eq direction 'previous) -1 1))
 	    
 	    (setq log-pos (point))))))
     (unless already-open
