@@ -23,77 +23,58 @@
 
 ;;; Commentary:
 
-;; Convenience functions for compiling LaTeX.  Under construction.
+;; This package provides convenience functions for compiling a LaTeX
+;; document continuously via latexmk and navigating the errors and
+;; warnings recorded in the log file.  Customize the variable
+;; `czm-tex-compile-command' to change the command used to compile the
+;; document.
+;;
+;; Sample use-package declaration:
+;;
+;; (use-package czm-tex-compile
+;;     :vc (:url "https://github.com/ultronozm/czm-tex-compile.el.git"
+;;               :rev :newest)
+;;     :after latex
+;;     :bind
+;;     ("C-c k" . czm-tex-compile)
+;;     ("M-]" . czm-tex-compile-next-error)
+;;     ("M-[" . czm-tex-compile-previous-error))
 
 ;;; Code:
 
 (require 'esh-mode)
 
+(defcustom czm-tex-compile-command
+  "latexmk -shell-escape -pvc -pdf -view=none -e '$pdflatex=q/pdflatex %O -interaction=nonstopmode %S/'"
+  "Command to compile LaTeX documents."
+  :type 'string
+  :group 'czm-tex-compile)
+
 ;;;###autoload
-(defun czm-tex-compile-start-latexmk-eshell ()
+(defun czm-tex-compile ()
+  "Compile the current LaTeX document in an eshell buffer.
+If the eshell buffer already exists, switch to it.  Otherwise,
+create a new eshell buffer and compile the document in it.  The
+eshell buffer is named *eshell-<name>*, where <name>.tex is the
+name of the current LaTeX file."
   (interactive)
-  (if (string-match "\\([^\.]+\\)\.tex" (buffer-name))
-      (let ((name (match-string 1 (buffer-name))))
-	(let ((bufname (concat "*eshell-" name "*")))
-	  (if (get-buffer bufname)
-	      (switch-to-buffer bufname)
-	    (save-window-excursion
-	      (eshell "new")
-	      (rename-buffer bufname)
-	      (insert (concat "latexmk -shell-escape -pvc -pdf -view=none " name ".tex"))
-	      (eshell-send-input)))))))
+  (when (string-match "\\([^\.]+\\)\.tex" (buffer-name))
+    (let* ((name (match-string 1 (buffer-name)))
+           (bufname (concat "*eshell-" name "*")))
+      (if (get-buffer bufname)
+	  (switch-to-buffer bufname)
+	(save-window-excursion
+	  (eshell "new")
+	  (rename-buffer bufname)
+	  (insert (concat czm-tex-compile-command " " name ".tex"))
+	  (eshell-send-input))))))
 
-;; next three are experimental
-
-(defun czm-tex-compile-my-latexmk-this-0 ()
-  (interactive)
-  (if (string-match "\\([^\.]+\\)\.tex" (buffer-name))
-      (let ((name (match-string 1 (buffer-name)))
-            (default-directory (file-name-directory (buffer-file-name))))
-        (let ((bufname (concat "*latexmk-" name "*")))
-          (with-current-buffer (get-buffer-create bufname)
-            (compilation-start (format "latexmk -shell-escape -pvc -pdf -view=none %s.tex" name) 'compilation-mode)
-            (display-buffer bufname))))))
-
-(defun czm-tex-compile-my-latexmk-this ()
-  (interactive)
-  (if (string-match "\\([^\.]+\\)\.tex" (buffer-name))
-      (let ((name (match-string 1 (buffer-name)))
-            (default-directory (file-name-directory (buffer-file-name))))
-        (let ((bufname (concat "*latexmk-" name "*")))
-          (with-current-buffer (get-buffer-create bufname)
-            (unless (eq major-mode 'compilation-mode)
-              (compilation-mode))
-            (compilation-start (format "latexmk -shell-escape -pvc -pdf -view=none %s.tex" name) nil
-                               (lambda (_mode-name) bufname))
-            (display-buffer bufname)
-            (local-set-key (kbd "x") 'czm-tex-compile-my-kill-compilation))))))
-
-(defun czm-tex-compile-my-kill-compilation ()
-  "Kill the current compilation process."
-  (interactive)
-  (when (get-buffer-process (current-buffer))
-    (interrupt-process (get-buffer-process (current-buffer)))
-    (message "Compilation process killed.")))
-
-;; Maybe improve this at some point using the following:
-;; (let ((entry (save-excursion
-;;              (bibtex-beginning-of-entry)
-;;              (bibtex-parse-entry))))
-;;       (cdr (assoc "=key=" entry))
-
-(defun czm-tex-compile-my-paragraph-as-line ()
-  (interactive)
-  (let ((beg (point))
-	(end (save-excursion
-	       (forward-paragraph)
-	       (point))))
-    (replace-regexp-in-string "\n" "" (buffer-substring-no-properties beg end))))
-
-(defvar-local czm-tex-compile-log-state nil
+(defvar-local czm-tex-compile--log-state nil
   "Cons containing last navigation time and log file position.")
 
 (defun czm-tex-compile--paragraph-as-line ()
+  "Return the current paragraph as a single line.
+Used for navigating LaTeX warnings in the log file."
   (interactive)
   (let ((beg (point))
 	(end (save-excursion
@@ -101,7 +82,7 @@
 	       (point))))
     (replace-regexp-in-string "\n" "" (buffer-substring-no-properties beg end))))
 
-(defun czm-tex-compile-navigate-log-error (direction)
+(defun czm-tex-compile--navigate-log-error (direction)
   "Helper function to navigate warnings in the log file.
 DIRECTION should be either \='next or \='previous."
   (let* ((tex-file (buffer-file-name))
@@ -109,8 +90,8 @@ DIRECTION should be either \='next or \='previous."
 	 (already-open (find-buffer-visiting log-file))
 	 (buf (or already-open (find-file-noselect log-file)))
 	 (file-modification-time (nth 5 (file-attributes log-file)))
-	 (last-navigation-time (car czm-tex-compile-log-state))
-	 (log-pos (cdr czm-tex-compile-log-state))
+	 (last-navigation-time (car czm-tex-compile--log-state))
+	 (log-pos (cdr czm-tex-compile--log-state))
 	 line description)
     (with-current-buffer buf
       (save-excursion)
@@ -150,34 +131,38 @@ DIRECTION should be either \='next or \='previous."
 	    (setq log-pos (point))))))
     (unless already-open
       (kill-buffer buf))
-    (setq-local czm-tex-compile-log-state (cons last-navigation-time log-pos))
+    (setq-local czm-tex-compile--log-state (cons last-navigation-time log-pos))
     (when line
-      (if (consp line)
-	  (progn
-            ;; TODO: should probably widen first?
-            (goto-char (point-min))
-            (forward-line (1- (car line)))
-	    (let* ((search-string (cdr line))
-		   (truncated-search-string
-		    (if (< (length search-string) 3)
-			search-string
-		      (substring search-string 3))))
-	      (search-forward truncated-search-string nil t)))
-        (goto-char (point-min))
-        (forward-line (1- line))))
+      (let ((pos
+             (save-excursion
+               (save-restriction
+                 (goto-char (point-min))
+                 (forward-line (1- (if (consp line) (car line) line)))
+                 (when (consp line)
+                   (let* ((search-string (cdr line))
+		          (truncated-search-string
+		           (if (< (length search-string) 3)
+			       search-string
+		             (substring search-string 3))))
+	             (search-forward truncated-search-string nil t)))
+                 (point)))))
+        (unless (<= (point-min) pos (point-max))
+          (widen))
+        (goto-char pos)
+        (recenter)))
     (message (or description "No further errors or warnings."))))
 
 ;;;###autoload
-(defun czm-tex-compile-previous-log-error ()
+(defun czm-tex-compile-previous-error ()
   "Move point to the previous LaTeX-warning line."
   (interactive)
-  (czm-tex-compile-navigate-log-error 'previous))
+  (czm-tex-compile--navigate-log-error 'previous))
 
 ;;;###autoload
-(defun czm-tex-compile-next-log-error ()
+(defun czm-tex-compile-next-error ()
   "Move point to the next LaTeX-warning line."
   (interactive)
-  (czm-tex-compile-navigate-log-error 'next))
+  (czm-tex-compile--navigate-log-error 'next))
 
 (provide 'czm-tex-compile)
 ;;; czm-tex-compile.el ends here
