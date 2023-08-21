@@ -150,7 +150,7 @@ DIRECTION should be either \='next or \='previous."
 	    (setq log-pos (point))))))
     (unless already-open
       (kill-buffer buf))
-    (setq-local czm/latex-log-state (cons last-navigation-time log-pos))
+    (setq-local czm-tex-compile-log-state (cons last-navigation-time log-pos))
     (when line
       (if (consp line)
 	  (progn
@@ -164,7 +164,7 @@ DIRECTION should be either \='next or \='previous."
 		      (substring search-string 3))))
 	      (search-forward truncated-search-string nil t)))
         (goto-char (point-min))
-        (forward-line (1- (car line)))))
+        (forward-line (1- line))))
     (message (or description "No further errors or warnings."))))
 
 ;;;###autoload
