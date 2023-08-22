@@ -50,6 +50,17 @@
   :type 'string
   :group 'czm-tex-compile)
 
+(defun czm-tex-compile--kill-buffer-hook ()
+  "Hook to kill the eshell buffer when the LaTeX buffer is killed."
+  (when (string-match "\\([^\.]+\\)\.tex" (buffer-name))
+    (let* ((name (match-string 1 (buffer-name)))
+           (bufname (concat "*eshell-" name "*")))
+      (when (get-buffer bufname)
+        (let ((kill-buffer-query-functions '()))
+          (with-current-buffer bufname
+            (eshell-interrupt-process))
+          (kill-buffer bufname))))))
+
 ;;;###autoload
 (defun czm-tex-compile ()
   "Compile the current LaTeX document in an eshell buffer.
@@ -64,6 +75,7 @@ name of the current LaTeX file."
       (if (get-buffer bufname)
 	  (switch-to-buffer bufname)
 	(save-window-excursion
+          (add-hook 'kill-buffer-hook #'czm-tex-compile--kill-buffer-hook)
 	  (eshell "new")
 	  (rename-buffer bufname)
 	  (insert (concat czm-tex-compile-command " " name ".tex"))
