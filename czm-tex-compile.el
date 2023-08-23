@@ -1,11 +1,11 @@
-;;; czm-tex-compile.el --- Convenience functions compiling LaTeX  -*- lexical-binding: t; -*-
+;;; czm-tex-compile.el --- Convenience functions for compiling LaTeX  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Paul D. Nelson
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
 ;; Version: 0.0
 ;; URL: https://github.com/ultronozm/czm-tex-compile.el
-;; Package-Requires: ((emacs "29.1") (auctex "11.86.1"))
+;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: tex
 
 ;; This program is free software; you can redistribute it and/or modify
