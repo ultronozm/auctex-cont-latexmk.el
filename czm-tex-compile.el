@@ -146,8 +146,8 @@ DIRECTION should be either \='next or \='previous."
 		      (setq line (cons line-number line-prefix)))))
 	      (when (string-match "input line \\([0-9]+\\)" description)
 		(setq line (string-to-number (match-string 1 description)))))
-            (forward-line -1)
-	    ;; (forward-line (if (eq direction 'previous) -1 1))
+            ;; (forward-line -1)
+	    (forward-line (if (eq direction 'previous) -1 1))
 	    
 	    (setq log-pos (point))))))
     (unless already-open
