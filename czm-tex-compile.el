@@ -45,7 +45,7 @@
 (require 'esh-mode)
 
 (defcustom czm-tex-compile-command
-  "latexmk -shell-escape -pvc -pdf -view=none -e '$pdflatex=q/pdflatex %O -interaction=nonstopmode %S/'"
+  "latexmk -shell-escape -pvc -pdf -view=none -synctex=1 -e '$pdflatex=q/pdflatex %O -interaction=nonstopmode %S/'"
   "Command to compile LaTeX documents."
   :type 'string
   :group 'czm-tex-compile)
