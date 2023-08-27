@@ -96,9 +96,7 @@ Used for navigating LaTeX warnings in the log file."
 
 ;; TODO: look for the line <name>.bbl in the file, and don't jump to
 ;; line numbers found in log entries beyond that point (just display
-;; them).  Also, use insert-file-contents rather than
-;; find-file-noselect, etc.  Similarly, do the same for .aux files in
-;; your other packages (tex-util, preview).
+;; them).
 
 (defvar czm-tex-compile--debug nil
   "Whether to print debugging information.")
