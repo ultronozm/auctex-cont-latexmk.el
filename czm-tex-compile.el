@@ -100,6 +100,9 @@ Used for navigating LaTeX warnings in the log file."
 ;; find-file-noselect, etc.  Similarly, do the same for .aux files in
 ;; your other packages (tex-util, preview).
 
+(defvar czm-tex-compile--debug nil
+  "Whether to print debugging information.")
+
 (defun czm-tex-compile--navigate-log-error (direction)
   "Helper function to navigate warnings in the log file.
 DIRECTION should be either \='next or \='previous."
@@ -121,35 +124,43 @@ DIRECTION should be either \='next or \='previous."
 	     (if (eq direction 'previous) #'re-search-backward #'re-search-forward)))
         (when (eq direction 'next)
           (forward-line 2))
-	(when (funcall search-fn
-		       (concat "^"
-			       (regexp-opt
-				'("! "
-				  "LaTeX Warning: "))
-			       "[^ ]")
-		       nil t)
-	  (goto-char (match-beginning 0))
-	  (let ((error-p (looking-at "! ")))
-	    (setq last-navigation-time (current-time))
-	    (setq description
-		  (if error-p
-		      (buffer-substring-no-properties
-		       (point) (line-end-position))
-		    (czm-tex-compile--paragraph-as-line)))
-	    (if error-p
-		(progn
-		  (save-excursion
-		    (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
-		    (let ((line-number (string-to-number (match-string 1)))
-			  (line-prefix (buffer-substring-no-properties
-					(point) (line-end-position))))
-		      (setq line (cons line-number line-prefix)))))
-	      (when (string-match "input line \\([0-9]+\\)" description)
-		(setq line (string-to-number (match-string 1 description)))))
-            ;; (forward-line -1)
-	    (forward-line (if (eq direction 'previous) -1 1))
-	    
-	    (setq log-pos (point))))))
+        (setq log-pos
+	      (cond
+               ((funcall search-fn
+		         (concat "^"
+			         (regexp-opt
+				  '("! "
+				    "LaTeX Warning: "))
+			         "[^ ]")
+		         nil t)
+	        (goto-char (match-beginning 0))
+	        (let ((error-p (looking-at "! ")))
+	          (setq last-navigation-time (current-time))
+	          (setq description
+		        (if error-p
+		            (buffer-substring-no-properties
+		             (point) (line-end-position))
+		          (czm-tex-compile--paragraph-as-line)))
+	          (if error-p
+		      (progn
+		        (save-excursion
+		          (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
+		          (let ((line-number (string-to-number (match-string 1)))
+			        (line-prefix (buffer-substring-no-properties
+					      (point) (line-end-position))))
+		            (setq line (cons line-number line-prefix)))))
+	            (when (string-match "input line \\([0-9]+\\)" description)
+		      (setq line (string-to-number (match-string 1 description)))))
+                  (forward-line -1)
+	          ;; (forward-line (if (eq direction 'previous) -1 1))
+	          
+	          (point)))
+               ((eq direction 'next)
+                (point-max))
+               ((eq direction 'previous)
+                (point-min))
+               (t
+                (error "Unknown direction: %s" direction))))))
     (unless already-open
       (kill-buffer buf))
     (setq-local czm-tex-compile--log-state (cons last-navigation-time log-pos))
@@ -171,7 +182,13 @@ DIRECTION should be either \='next or \='previous."
           (widen))
         (goto-char pos)
         (recenter)))
-    (message (or description "No further errors or warnings."))))
+    (message
+     (concat (or description "No further errors or warnings.")
+             (when czm-tex-compile--debug
+               " -- "
+               (format "%s" (cdr czm-tex-compile--log-state)))))))
+
+
 
 ;;;###autoload
 (defun czm-tex-compile-previous-error ()
