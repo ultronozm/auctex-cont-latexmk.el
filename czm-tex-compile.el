@@ -108,13 +108,12 @@ Used for navigating LaTeX warnings in the log file."
 DIRECTION should be either \='next or \='previous."
   (let* ((tex-file (buffer-file-name))
 	 (log-file (concat (file-name-sans-extension tex-file) ".log"))
-	 (already-open (find-buffer-visiting log-file))
-	 (buf (or already-open (find-file-noselect log-file)))
 	 (file-modification-time (nth 5 (file-attributes log-file)))
 	 (last-navigation-time (car czm-tex-compile--log-state))
 	 (log-pos (cdr czm-tex-compile--log-state))
 	 line description)
-    (with-current-buffer buf
+    (with-temp-buffer
+      (insert-file-contents log-file)
       (save-excursion)
       (if (or (null last-navigation-time)
 	      (time-less-p last-navigation-time file-modification-time))
@@ -161,8 +160,6 @@ DIRECTION should be either \='next or \='previous."
                 (point-min))
                (t
                 (error "Unknown direction: %s" direction))))))
-    (unless already-open
-      (kill-buffer buf))
     (setq-local czm-tex-compile--log-state (cons last-navigation-time log-pos))
     (when line
       (let ((pos
