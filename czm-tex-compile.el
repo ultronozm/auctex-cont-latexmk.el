@@ -92,52 +92,58 @@ Used for navigating LaTeX warnings in the log file."
   "Helper function to navigate warnings in the log file.
 DIRECTION should be either \='next or \='previous."
   (let* ((tex-file (buffer-file-name))
-	 (log-file (concat (file-name-sans-extension tex-file) ".log"))
-	 (already-open (find-buffer-visiting log-file))
-	 (buf (or already-open (find-file-noselect log-file)))
-	 (file-modification-time (nth 5 (file-attributes log-file)))
-	 (last-navigation-time (car czm-tex-compile--log-state))
-	 (log-pos (cdr czm-tex-compile--log-state))
-	 line description)
+	        (log-file (concat (file-name-sans-extension tex-file)
+                           ".log"))
+	        (already-open (find-buffer-visiting log-file))
+	        (buf (or already-open (find-file-noselect log-file)))
+	        (file-modification-time (nth 5 (file-attributes log-file)))
+	        (last-navigation-time (car czm-tex-compile--log-state))
+	        (log-pos (cdr czm-tex-compile--log-state))
+	        line description)
     (with-current-buffer buf
       (save-excursion)
       (if (or (null last-navigation-time)
-	      (time-less-p last-navigation-time file-modification-time))
-	  (goto-char (if (eq direction 'previous) (point-max) (point-min)))
-	(goto-char log-pos))
+	             (time-less-p last-navigation-time file-modification-time))
+	         (goto-char (if (eq direction 'previous)
+                         (point-max)
+                       (point-min)))
+	       (goto-char log-pos))
       (let ((search-fn
-	     (if (eq direction 'previous) #'re-search-backward #'re-search-forward)))
+	            (if (eq direction 'previous)
+                 #'re-search-backward #'re-search-forward)))
         (when (eq direction 'next)
           (forward-line 2))
-	(when (funcall search-fn
-		       (concat "^"
-			       (regexp-opt
-				'("! "
-				  "LaTeX Warning: "))
-			       "[^ ]")
-		       nil t)
-	  (goto-char (match-beginning 0))
-	  (let ((error-p (looking-at "! ")))
-	    (setq last-navigation-time (current-time))
-	    (setq description
-		  (if error-p
-		      (buffer-substring-no-properties
-		       (point) (line-end-position))
-		    (czm-tex-compile--paragraph-as-line)))
-	    (if error-p
-		(progn
-		  (save-excursion
-		    (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
-		    (let ((line-number (string-to-number (match-string 1)))
-			  (line-prefix (buffer-substring-no-properties
-					(point) (line-end-position))))
-		      (setq line (cons line-number line-prefix)))))
-	      (when (string-match "input line \\([0-9]+\\)" description)
-		(setq line (string-to-number (match-string 1 description)))))
+	       (when (funcall search-fn
+		                     (concat "^"
+			                            (regexp-opt
+				                            '("! "
+				                              "LaTeX Warning: "))
+			                            "[^ ]")
+		                     nil t)
+	         (goto-char (match-beginning 0))
+	         (let ((error-p (looking-at "! ")))
+	           (setq last-navigation-time (current-time))
+	           (setq description
+		                (if error-p
+		                    (buffer-substring-no-properties
+		                     (point)
+                       (line-end-position))
+		                  (czm-tex-compile--paragraph-as-line)))
+	           (if error-p
+		              (progn
+		                (save-excursion
+		                  (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
+		                  (let ((line-number (when (match-string 1)
+                                         (string-to-number (match-string 1))))
+			                       (line-prefix (buffer-substring-no-properties
+					                                   (point)
+                                        (line-end-position))))
+		                    (setq line (cons line-number line-prefix)))))
+	             (when (string-match "input line \\([0-9]+\\)" description)
+		              (setq line (string-to-number (match-string 1 description)))))
             (forward-line -1)
-	    ;; (forward-line (if (eq direction 'previous) -1 1))
-	    
-	    (setq log-pos (point))))))
+	           ;; (forward-line (if (eq direction 'previous) -1 1))
+	           (setq log-pos (point))))))
     (unless already-open
       (kill-buffer buf))
     (setq-local czm-tex-compile--log-state (cons last-navigation-time log-pos))
@@ -146,16 +152,22 @@ DIRECTION should be either \='next or \='previous."
              (save-excursion
                (save-restriction
                  (goto-char (point-min))
-                 (forward-line (1- (if (consp line) (car line) line)))
+                 (when-let ((line-number
+                             (if (consp line)
+                                 (car line)
+                               line)))
+                   (forward-line (1- line-number)))
                  (when (consp line)
-                   (let* ((search-string (cdr line))
-		          (truncated-search-string
-		           (if (< (length search-string) 3)
-			       search-string
-		             (substring search-string 3))))
-	             (search-forward truncated-search-string nil t)))
+                   (when-let* ((search-string (cdr line))
+		                             (truncated-search-string
+		                              (if (< (length search-string)
+                                       3)
+			                                 search-string
+		                                (substring search-string 3))))
+	                    (search-forward truncated-search-string nil t)))
                  (point)))))
-        (unless (<= (point-min) pos (point-max))
+        (unless (<= (point-min)
+                    pos (point-max))
           (widen))
         (goto-char pos)
         (recenter)))
