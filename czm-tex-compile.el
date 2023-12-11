@@ -1,11 +1,11 @@
-;;; czm-tex-compile.el --- Convenience functions compiling LaTeX  -*- lexical-binding: t; -*-
+;;; czm-tex-compile.el --- Convenience functions for compiling LaTeX  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Paul D. Nelson
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
 ;; Version: 0.0
 ;; URL: https://github.com/ultronozm/czm-tex-compile.el
-;; Package-Requires: ((emacs "29.1") (auctex "11.86.1"))
+;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: tex
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -50,6 +50,17 @@
   :type 'string
   :group 'czm-tex-compile)
 
+(defun czm-tex-compile--kill-buffer-hook ()
+  "Hook to kill the eshell buffer when the LaTeX buffer is killed."
+  (when (string-match "\\([^\.]+\\)\.tex" (buffer-name))
+    (let* ((name (match-string 1 (buffer-name)))
+           (bufname (concat "*eshell-" name "*")))
+      (when (get-buffer bufname)
+        (let ((kill-buffer-query-functions '()))
+          (with-current-buffer bufname
+            (eshell-interrupt-process))
+          (kill-buffer bufname))))))
+
 ;;;###autoload
 (defun czm-tex-compile ()
   "Compile the current LaTeX document in an eshell buffer.
@@ -64,6 +75,7 @@ name of the current LaTeX file."
       (if (get-buffer bufname)
 	  (switch-to-buffer bufname)
 	(save-window-excursion
+          (add-hook 'kill-buffer-hook #'czm-tex-compile--kill-buffer-hook)
 	  (eshell "new")
 	  (rename-buffer bufname)
 	  (insert (concat czm-tex-compile-command " " name ".tex"))
@@ -84,23 +96,22 @@ Used for navigating LaTeX warnings in the log file."
 
 ;; TODO: look for the line <name>.bbl in the file, and don't jump to
 ;; line numbers found in log entries beyond that point (just display
-;; them).  Also, use insert-file-contents rather than
-;; find-file-noselect, etc.  Similarly, do the same for .aux files in
-;; your other packages (tex-util, preview).
+;; them).
+
+(defvar czm-tex-compile--debug nil
+  "Whether to print debugging information.")
 
 (defun czm-tex-compile--navigate-log-error (direction)
   "Helper function to navigate warnings in the log file.
 DIRECTION should be either \='next or \='previous."
   (let* ((tex-file (buffer-file-name))
-	        (log-file (concat (file-name-sans-extension tex-file)
-                           ".log"))
-	        (already-open (find-buffer-visiting log-file))
-	        (buf (or already-open (find-file-noselect log-file)))
-	        (file-modification-time (nth 5 (file-attributes log-file)))
-	        (last-navigation-time (car czm-tex-compile--log-state))
-	        (log-pos (cdr czm-tex-compile--log-state))
-	        line description)
-    (with-current-buffer buf
+	 (log-file (concat (file-name-sans-extension tex-file) ".log"))
+	 (file-modification-time (nth 5 (file-attributes log-file)))
+	 (last-navigation-time (car czm-tex-compile--log-state))
+	 (log-pos (cdr czm-tex-compile--log-state))
+	 line description)
+    (with-temp-buffer
+      (insert-file-contents log-file)
       (save-excursion)
       (if (or (null last-navigation-time)
 	             (time-less-p last-navigation-time file-modification-time))
@@ -171,7 +182,13 @@ DIRECTION should be either \='next or \='previous."
           (widen))
         (goto-char pos)
         (recenter)))
-    (message (or description "No further errors or warnings."))))
+    (message
+     (concat (or description "No further errors or warnings.")
+             (when czm-tex-compile--debug
+               " -- "
+               (format "%s" (cdr czm-tex-compile--log-state)))))))
+
+
 
 ;;;###autoload
 (defun czm-tex-compile-previous-error ()
