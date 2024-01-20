@@ -155,8 +155,6 @@ DIRECTION should be either \='next or \='previous."
             (forward-line -1)
 	           ;; (forward-line (if (eq direction 'previous) -1 1))
 	           (setq log-pos (point))))))
-    (unless already-open
-      (kill-buffer buf))
     (setq-local czm-tex-compile--log-state (cons last-navigation-time log-pos))
     (when line
       (let ((pos
