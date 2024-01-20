@@ -1,4 +1,4 @@
-#+title: czm-preview.el: Convenience functions for compiling LaTeX
+#+title: czm-tex-compile.el: Convenience functions for compiling LaTeX
 #+author: Paul Nelson
 
 * Overview
