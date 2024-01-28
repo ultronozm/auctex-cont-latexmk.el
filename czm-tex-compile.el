@@ -188,6 +188,107 @@ DIRECTION should be either \='next or \='previous."
                (format "%s" (cdr czm-tex-compile--log-state)))))))
 
 
+(defun czm-tex-compile-process-log ()
+  (let* ((tex-file (buffer-file-name))
+	 (log-file (concat (file-name-sans-extension tex-file)
+                           ".log"))
+	 results)
+    (with-temp-buffer
+      (insert-file-contents log-file)
+      (goto-char (point-min))
+      (while (re-search-forward (concat "^" (regexp-opt '("! " "LaTeX Warning: "))
+                                        "[^ ]")
+                                nil t)
+        (save-excursion
+	  (goto-char (match-beginning 0))
+	  (let* ((error-p (looking-at "! "))
+                 (description (if error-p (buffer-substring-no-properties (point)
+                                                                          (line-end-position))
+                                (czm-tex-compile--paragraph-as-line)))
+                 line prefix)
+	    (if error-p
+	        (progn
+		  (save-excursion
+                    (when
+		        (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
+                      (setq line (when (match-string 1)
+                                   (string-to-number (match-string 1))))
+		      (setq prefix (buffer-substring-no-properties (point)
+                                                                   (line-end-position))))))
+	      (when (string-match "input line \\([0-9]+\\)" description)
+	        (setq line (string-to-number (match-string 1 description)))))
+            (when line
+              (push (list error-p description line prefix)
+                    results))))))
+    (setq results
+          (mapcar
+           (lambda (result)
+             (cl-destructuring-bind (error-p description line prefix)
+                 result
+               (list error-p
+                     description
+                     (if prefix
+                         (let ((pos
+                                (save-excursion
+                                  (save-restriction
+                                    (widen)
+                                    (goto-char (point-min))
+                                    (forward-line (1- line))
+                                    ;; should probably just delete any
+                                    ;; "..." at beginning
+                                    (let ((truncated-prefix
+                                           (substring prefix
+                                                      (max 0 (- (length prefix)
+                                                                3)))))
+                                      (search-forward truncated-prefix nil t))))))
+                           (when pos
+                             (cons pos (1+ pos))))
+                       (flymake-diag-region (current-buffer)
+                                            line)))))
+           results))
+    results))
+
+(defun czm-tex-compile--fresh-p ()
+  "Return non-nil if logged errors should apply to current buffer.
+This is the case if the current buffer is not modified, the
+current buffer is a file, the current buffer has a log file, and
+the log file is newer than the current buffer."
+  (when-let* ((file (buffer-file-name))
+              (log-file (concat (file-name-sans-extension file)
+                                ".log")))
+    (and
+     (not (buffer-modified-p))
+     (file-exists-p file)
+     (file-exists-p log-file)
+     (time-less-p (nth 5 (file-attributes file))
+                  (nth 5 (file-attributes log-file))))))
+
+(defun czm-tex-compile-flymake (report-fn &rest args)
+  "Flymake backend for LaTeX based on latexmk.
+REPORT-FN is the function called to report diagnostics.
+ARGS are the keyword-value pairs concerning edits"
+  (message "diagnostics time! %s" args)
+  (when (czm-tex-compile--fresh-p)
+    (let* ((log-data (czm-tex-compile-process-log))
+           (diags (mapcar
+                   (lambda (datum)
+                     (cl-destructuring-bind (error-p description region)
+                         datum
+                       (flymake-make-diagnostic
+                        (current-buffer)
+                        (car region)
+                        (cdr region)
+                        (if error-p
+                            :error
+                          :warning)
+                        description)))
+                   log-data)))
+      (funcall report-fn diags))))
+
+(defun czm-tex-compile-setup-flymake-backend ()
+  "Setup flymake backend."
+  (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake
+            nil t))
 
 ;;;###autoload
 (defun czm-tex-compile-previous-error ()
