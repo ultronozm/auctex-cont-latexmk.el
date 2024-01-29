@@ -72,6 +72,7 @@ name of the current LaTeX file."
   (when (string-match "\\([^\.]+\\)\.tex" (buffer-name))
     (let* ((name (match-string 1 (buffer-name)))
            (bufname (concat "*eshell-" name "*")))
+      (czm-tex-compile-setup-flymake-backend)
       (if (get-buffer bufname)
 	  (switch-to-buffer bufname)
 	(save-window-excursion
@@ -98,113 +99,46 @@ Used for navigating LaTeX warnings in the log file."
 ;; line numbers found in log entries beyond that point (just display
 ;; them).
 
-(defvar czm-tex-compile--debug nil
-  "Whether to print debugging information.")
-
-(defun czm-tex-compile--navigate-log-error (direction)
-  "Helper function to navigate warnings in the log file.
-DIRECTION should be either \='next or \='previous."
-  (let* ((tex-file (buffer-file-name))
-	 (log-file (concat (file-name-sans-extension tex-file)
-                           ".log"))
-	 (file-modification-time (nth 5 (file-attributes log-file)))
-	 (last-navigation-time (car czm-tex-compile--log-state))
-	 (log-pos (cdr czm-tex-compile--log-state))
-	 line description)
-    (with-temp-buffer
-      (insert-file-contents log-file)
-      (save-excursion)
-      (if (or (null last-navigation-time)
-	      (time-less-p last-navigation-time file-modification-time))
-	  (goto-char (if (eq direction 'previous)
-                         (point-max)
-                       (point-min)))
-	(goto-char log-pos))
-      (let ((search-fn
-	     (if (eq direction 'previous)
-                 #'re-search-backward #'re-search-forward)))
-        (when (eq direction 'next)
-          (forward-line 2))
-	(when (funcall search-fn
-		       (concat "^"
-			       (regexp-opt
-				'("! "
-				  "LaTeX Warning: "))
-			       "[^ ]")
-		       nil t)
-	  (goto-char (match-beginning 0))
-	  (let ((error-p (looking-at "! ")))
-	    (setq last-navigation-time (current-time))
-	    (setq description
-		  (if error-p
-		      (buffer-substring-no-properties
-		       (point)
-                       (line-end-position))
-		    (czm-tex-compile--paragraph-as-line)))
-	    (if error-p
-		(progn
-		  (save-excursion
-		    (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
-		    (let ((line-number (when (match-string 1)
-                                         (string-to-number (match-string 1))))
-			  (line-prefix (buffer-substring-no-properties
-					(point)
-                                        (line-end-position))))
-		      (setq line (cons line-number line-prefix)))))
-	      (when (string-match "input line \\([0-9]+\\)" description)
-		(setq line (string-to-number (match-string 1 description)))))
-            (forward-line -1)
-	    ;; (forward-line (if (eq direction 'previous) -1 1))
-	    (setq log-pos (point))))))
-    (setq-local czm-tex-compile--log-state (cons last-navigation-time log-pos))
-    (when line
-      (let ((pos
-             (save-excursion
-               (save-restriction
-                 (goto-char (point-min))
-                 (when-let ((line-number
-                             (if (consp line)
-                                 (car line)
-                               line)))
-                   (forward-line (1- line-number)))
-                 (when (consp line)
-                   (when-let* ((search-string (cdr line))
-		               (truncated-search-string
-		                (if (< (length search-string)
-                                       3)
-			            search-string
-		                  (substring search-string 3))))
-	             (search-forward truncated-search-string nil t)))
-                 (point)))))
-        (unless (<= (point-min)
-                    pos (point-max))
-          (widen))
-        (goto-char pos)
-        (recenter)))
-    (message
-     (concat (or description "No further errors or warnings.")
-             (when czm-tex-compile--debug
-               " -- "
-               (format "%s" (cdr czm-tex-compile--log-state)))))))
-
+(defun czm-tex-compile--log-parent ()
+  (beginning-of-line)
+  (let ((tally 0)
+        (found nil))
+    (while (and (null found) (> (point) (point-min)))
+      (forward-line -1)
+      (cond
+       ((looking-at "(")
+        (cl-incf tally (count-matches "(" (line-beginning-position) (line-end-position)))
+        (cl-decf tally (count-matches ")" (line-beginning-position) (line-end-position)))
+        (when (equal 1 tally)
+          (setq found (buffer-substring-no-properties (1+ (point)) (line-end-position)))))
+       ((looking-at "[)]+")
+        (cl-decf tally (length (match-string 0))))))
+    found))
 
 (defun czm-tex-compile-process-log ()
+  "Process the log file for the current LaTeX document."
   (let* ((tex-file (buffer-file-name))
 	 (log-file (concat (file-name-sans-extension tex-file)
                            ".log"))
+         (error-prefix "! ")
+         (warning-prefix "LaTeX Warning: ")
 	 results)
     (with-temp-buffer
       (insert-file-contents log-file)
       (goto-char (point-min))
-      (while (re-search-forward (concat "^" (regexp-opt '("! " "LaTeX Warning: "))
+      (while (re-search-forward (concat "^" (regexp-opt (list error-prefix
+                                                              warning-prefix))
                                         "[^ ]")
                                 nil t)
         (save-excursion
 	  (goto-char (match-beginning 0))
 	  (let* ((error-p (looking-at "! "))
-                 (description (if error-p (buffer-substring-no-properties (point)
+                 (description (if error-p (buffer-substring-no-properties (+ (length error-prefix)
+                                                                             (point))
                                                                           (line-end-position))
-                                (czm-tex-compile--paragraph-as-line)))
+                                (substring
+                                 (czm-tex-compile--paragraph-as-line)
+                                 (length warning-prefix))))
                  line prefix)
 	    (if error-p
 	        (progn
@@ -263,13 +197,9 @@ the log file is newer than the current buffer."
      (time-less-p (nth 5 (file-attributes file))
                   (nth 5 (file-attributes log-file))))))
 
-(defun czm-tex-compile-flymake (report-fn &rest args)
-  "Flymake backend for LaTeX based on latexmk.
-REPORT-FN is the function called to report diagnostics.
-ARGS are the keyword-value pairs concerning edits"
-  (message "diagnostics time! %s" args)
-  (when (czm-tex-compile--fresh-p)
-    (let* ((log-data (czm-tex-compile-process-log))
+(defun czm-tex-compile-report (report-fn)
+  "Call REPORT-FN if the current buffer is fresh."
+  (let* ((log-data (czm-tex-compile-process-log))
            (diags (mapcar
                    (lambda (datum)
                      (cl-destructuring-bind (error-p description region)
@@ -283,24 +213,56 @@ ARGS are the keyword-value pairs concerning edits"
                           :warning)
                         description)))
                    log-data)))
-      (funcall report-fn diags))))
+      (funcall report-fn diags)
+      t))
+
+(defun czm-tex-compile-report-if-fresh (report-fn)
+  "Call REPORT-FN if the current buffer is fresh."
+  (when (czm-tex-compile--fresh-p)
+    (czm-tex-compile-report report-fn)))
+
+(defvar czm-tex-compile-log-watch-descriptor nil)
+(defvar czm-tex-compile-report-fn nil)
+(defvar czm-tex-compile-log-watch-timer nil)
+
+(defun czm-tex-compile-log-timer-fn ()
+  "Call `czm-tex-compile-report-if-fresh' and cancels the timer."
+  (when czm-tex-compile-log-watch-timer
+    (cancel-timer czm-tex-compile-log-watch-timer))
+  (czm-tex-compile-report-if-fresh czm-tex-compile-report-fn))
+
+(defun czm-tex-compile-log-change-handler (event)
+  "Handle EVENT from log watcher.
+If EVENT is `changed', then run `czm-tex-compile-log-timer-fn'
+one second from now, so that the log has enough time to fully
+update."
+  (when (eq (nth 1 event) 'changed)
+    (when czm-tex-compile-log-watch-timer
+      (cancel-timer czm-tex-compile-log-watch-timer))
+    (setq-local czm-tex-compile-log-watch-timer
+                (run-with-timer 1 1 #'czm-tex-compile-log-timer-fn))))
+
+(require 'filenotify)
+
+(defun czm-tex-compile-flymake (report-fn &rest _args)
+  "Flymake backend for LaTeX based on latexmk.
+REPORT-FN is the function called to report diagnostics.
+ARGS are the keyword-value pairs concerning edits"
+  (czm-tex-compile-report-if-fresh report-fn)
+  (setq-local czm-tex-compile-report-fn report-fn)
+  (when czm-tex-compile-log-watch-descriptor
+    (file-notify-rm-watch czm-tex-compile-log-watch-descriptor))
+  (setq-local czm-tex-compile-log-watch-descriptor
+              (file-notify-add-watch
+               (concat (file-name-sans-extension (buffer-file-name))
+                       ".log")
+               '(change)
+               #'czm-tex-compile-log-change-handler)))
 
 (defun czm-tex-compile-setup-flymake-backend ()
   "Setup flymake backend."
   (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake
             nil t))
-
-;;;###autoload
-(defun czm-tex-compile-previous-error ()
-  "Move point to the previous LaTeX-warning line."
-  (interactive)
-  (czm-tex-compile--navigate-log-error 'previous))
-
-;;;###autoload
-(defun czm-tex-compile-next-error ()
-  "Move point to the next LaTeX-warning line."
-  (interactive)
-  (czm-tex-compile--navigate-log-error 'next))
 
 (provide 'czm-tex-compile)
 ;;; czm-tex-compile.el ends here
