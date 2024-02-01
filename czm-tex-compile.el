@@ -72,7 +72,8 @@ name of the current LaTeX file."
   (when (string-match "\\([^\.]+\\)\.tex" (buffer-name))
     (let* ((name (match-string 1 (buffer-name)))
            (bufname (concat "*eshell-" name "*")))
-      (czm-tex-compile-setup-flymake-backend)
+      (czm-tex-compile-restrict-flymake-backends)
+      ;; (czm-tex-compile-setup-flymake-backend)
       (if (get-buffer bufname)
 	         (switch-to-buffer bufname)
 	       (save-window-excursion
@@ -118,9 +119,10 @@ Used for navigating LaTeX warnings in the log file."
                      (lambda (item)
                        (let* ((error-p (eq (nth 0 item)
                                            'error))
-                              (description-raw (nth 3 item))
+                              (description-raw (nth (if error-p 3 5) item))
                               (description (if error-p description-raw
-                                             (substring description-raw (length "LaTeX Warning: "))))
+                                             (substring description-raw
+                                                        (length "LaTeX Warning: ") -1)))
                               line prefix
                               region)
                          (if error-p
@@ -136,7 +138,9 @@ Used for navigating LaTeX warnings in the log file."
 	                            (setq line (string-to-number (match-string 1 description)))))
                          (list
                           error-p
-                          description
+                          (replace-regexp-in-string
+                           "\n" ""
+                           description)
                           (when line
                             (if prefix
                                 (let ((pos
@@ -246,6 +250,16 @@ ARGS are the keyword-value pairs concerning edits"
   "Setup flymake backend."
   (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake
             nil t))
+
+(defun czm-tex-compile-restrict-flymake-backends ()
+  (interactive)
+  (setq flymake-diagnostic-functions '(czm-tex-compile-flymake t)))
+
+(defun czm-tex-compile-relax-flymake-backends ()
+  (interactive)
+  (setq flymake-diagnostic-functions '(czm-tex-compile-flymake LaTeX-flymake t)))
+
+
 
 (provide 'czm-tex-compile)
 ;;; czm-tex-compile.el ends here
