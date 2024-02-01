@@ -85,6 +85,7 @@ name of the current LaTeX file."
 (defvar-local czm-tex-compile--log-state nil
   "Cons containing last navigation time and log file position.")
 
+;; maybe delete this?
 (defun czm-tex-compile--paragraph-as-line ()
   "Return the current paragraph as a single line.
 Used for navigating LaTeX warnings in the log file."
@@ -95,29 +96,10 @@ Used for navigating LaTeX warnings in the log file."
 	              (point))))
     (replace-regexp-in-string "\n" "" (buffer-substring-no-properties beg end))))
 
-;; TODO: look for the line <name>.bbl in the file, and don't jump to
-;; line numbers found in log entries beyond that point (just display
-;; them).
-
-(defun czm-tex-compile--log-parent ()
-  (beginning-of-line)
-  (let ((tally 0)
-        (found nil))
-    (while (and (null found) (> (point) (point-min)))
-      (forward-line -1)
-      (cond
-       ((looking-at "(")
-        (cl-incf tally (count-matches "(" (line-beginning-position) (line-end-position)))
-        (cl-decf tally (count-matches ")" (line-beginning-position) (line-end-position)))
-        (when (equal 1 tally)
-          (setq found (buffer-substring-no-properties (1+ (point)) (line-end-position)))))
-       ((looking-at "[)]+")
-        (cl-decf tally (length (match-string 0))))))
-    found))
-
 (defun czm-tex-compile-process-log ()
   "Process the log file for the current LaTeX document."
-  (let* ((tex-file (buffer-file-name))
+  (let* ((current-buf (current-buffer))
+         (tex-file (buffer-file-name))
 	        (log-file (concat (file-name-sans-extension tex-file)
                            ".log"))
          (error-prefix "! ")
@@ -125,62 +107,58 @@ Used for navigating LaTeX warnings in the log file."
 	        results)
     (with-temp-buffer
       (insert-file-contents log-file)
-      (goto-char (point-min))
-      (while (re-search-forward (concat "^" (regexp-opt (list error-prefix
-                                                              warning-prefix))
-                                        "[^ ]")
-                                nil t)
-        (save-excursion
-	         (goto-char (match-beginning 0))
-	         (let* ((error-p (looking-at "! "))
-                 (description (if error-p (buffer-substring-no-properties (+ (length error-prefix)
-                                                                             (point))
-                                                                          (line-end-position))
-                                (substring
-                                 (czm-tex-compile--paragraph-as-line)
-                                 (length warning-prefix))))
-                 line prefix)
-	           (if error-p
-	               (progn
-		                (save-excursion
-                    (when
-		                      (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
-                      (setq line (when (match-string 1)
-                                   (string-to-number (match-string 1))))
-		                    (setq prefix (buffer-substring-no-properties (point)
-                                                                   (line-end-position))))))
-	             (when (string-match "input line \\([0-9]+\\)" description)
-	               (setq line (string-to-number (match-string 1 description)))))
-            (when line
-              (push (list error-p description line prefix)
-                    results))))))
-    (setq results
-          (mapcar
-           (lambda (result)
-             (cl-destructuring-bind (error-p description line prefix)
-                 result
-               (list error-p
-                     description
-                     (if prefix
-                         (let ((pos
-                                (save-excursion
-                                  (save-restriction
-                                    (widen)
-                                    (goto-char (point-min))
-                                    (forward-line (1- line))
-                                    ;; should probably just delete any
-                                    ;; "..." at beginning?
-                                    (let ((truncated-prefix
-                                           (substring prefix
-                                                      (max 0 (- (length prefix)
-                                                                3)))))
-                                      (search-forward truncated-prefix nil t))))))
-                           (when pos
-                             (cons pos (1+ pos))))
-                       (flymake-diag-region (current-buffer)
-                                            line)))))
-           results))
-    results))
+      (let* ((error-list (progn (TeX-parse-all-errors)
+                                TeX-error-list))
+             (filtered (seq-filter
+                        (lambda (item)
+                          (equal (expand-file-name (nth 1 item))
+                                 (expand-file-name tex-file)))
+                        error-list))
+             (stuff (mapcar
+                     (lambda (item)
+                       (let* ((error-p (eq (nth 0 item)
+                                           'error))
+                              (description-raw (nth 3 item))
+                              (description (if error-p description-raw
+                                             (substring description-raw (length "LaTeX Warning: "))))
+                              line prefix
+                              region)
+                         (if error-p
+                             (with-temp-buffer
+                               (insert (nth 5 item))
+                               (goto-char (point-min))
+                               (when (re-search-forward "^\nl\\.\\([0-9]+\\) " nil t)
+                                 (setq line (when (match-string 1)
+                                              (string-to-number (match-string 1))))
+		                               (setq prefix (buffer-substring-no-properties (point)
+                                                                              (line-end-position)))))
+	                          (when (string-match "input line \\([0-9]+\\)" description)
+	                            (setq line (string-to-number (match-string 1 description)))))
+                         (list
+                          error-p
+                          description
+                          (when line
+                            (if prefix
+                                (let ((pos
+                                       (with-current-buffer current-buf
+                                         (save-excursion
+                                           (save-restriction
+                                             (widen)
+                                             (goto-char (point-min))
+                                             (forward-line (1- line))
+                                             ;; should probably just delete any
+                                             ;; "..." at beginning?
+                                             (let ((truncated-prefix
+                                                    (substring prefix
+                                                               (max 0 (- (length prefix)
+                                                                         3)))))
+                                               (search-forward truncated-prefix nil t)))))))
+                                  (when pos
+                                    (cons pos (1+ pos))))
+                              (flymake-diag-region current-buf
+                                                   line))))))
+                     filtered)))
+        stuff))))
 
 (defun czm-tex-compile--fresh-p ()
   "Return non-nil if logged errors should apply to current buffer.
@@ -212,7 +190,11 @@ the log file is newer than the current buffer."
                           :error
                         :warning)
                       description)))
-                 log-data)))
+                 (seq-filter
+                  (lambda (datum)
+                    (not (null (nth 2 datum)))
+                    )
+                  log-data))))
     (funcall report-fn diags)
     t))
 
