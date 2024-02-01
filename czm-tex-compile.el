@@ -74,13 +74,13 @@ name of the current LaTeX file."
            (bufname (concat "*eshell-" name "*")))
       (czm-tex-compile-setup-flymake-backend)
       (if (get-buffer bufname)
-	  (switch-to-buffer bufname)
-	(save-window-excursion
+	         (switch-to-buffer bufname)
+	       (save-window-excursion
           (add-hook 'kill-buffer-hook #'czm-tex-compile--kill-buffer-hook)
-	  (eshell "new")
-	  (rename-buffer bufname)
-	  (insert (concat czm-tex-compile-command " " name ".tex"))
-	  (eshell-send-input))))))
+	         (eshell "new")
+	         (rename-buffer bufname)
+	         (insert (concat czm-tex-compile-command " " name ".tex"))
+	         (eshell-send-input))))))
 
 (defvar-local czm-tex-compile--log-state nil
   "Cons containing last navigation time and log file position.")
@@ -90,9 +90,9 @@ name of the current LaTeX file."
 Used for navigating LaTeX warnings in the log file."
   (interactive)
   (let ((beg (point))
-	(end (save-excursion
-	       (forward-paragraph)
-	       (point))))
+	       (end (save-excursion
+	              (forward-paragraph)
+	              (point))))
     (replace-regexp-in-string "\n" "" (buffer-substring-no-properties beg end))))
 
 ;; TODO: look for the line <name>.bbl in the file, and don't jump to
@@ -118,11 +118,11 @@ Used for navigating LaTeX warnings in the log file."
 (defun czm-tex-compile-process-log ()
   "Process the log file for the current LaTeX document."
   (let* ((tex-file (buffer-file-name))
-	 (log-file (concat (file-name-sans-extension tex-file)
+	        (log-file (concat (file-name-sans-extension tex-file)
                            ".log"))
          (error-prefix "! ")
          (warning-prefix "LaTeX Warning: ")
-	 results)
+	        results)
     (with-temp-buffer
       (insert-file-contents log-file)
       (goto-char (point-min))
@@ -131,8 +131,8 @@ Used for navigating LaTeX warnings in the log file."
                                         "[^ ]")
                                 nil t)
         (save-excursion
-	  (goto-char (match-beginning 0))
-	  (let* ((error-p (looking-at "! "))
+	         (goto-char (match-beginning 0))
+	         (let* ((error-p (looking-at "! "))
                  (description (if error-p (buffer-substring-no-properties (+ (length error-prefix)
                                                                              (point))
                                                                           (line-end-position))
@@ -140,17 +140,17 @@ Used for navigating LaTeX warnings in the log file."
                                  (czm-tex-compile--paragraph-as-line)
                                  (length warning-prefix))))
                  line prefix)
-	    (if error-p
-	        (progn
-		  (save-excursion
+	           (if error-p
+	               (progn
+		                (save-excursion
                     (when
-		        (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
+		                      (re-search-forward "^l\\.\\([0-9]+\\) " nil t)
                       (setq line (when (match-string 1)
                                    (string-to-number (match-string 1))))
-		      (setq prefix (buffer-substring-no-properties (point)
+		                    (setq prefix (buffer-substring-no-properties (point)
                                                                    (line-end-position))))))
-	      (when (string-match "input line \\([0-9]+\\)" description)
-	        (setq line (string-to-number (match-string 1 description)))))
+	             (when (string-match "input line \\([0-9]+\\)" description)
+	               (setq line (string-to-number (match-string 1 description)))))
             (when line
               (push (list error-p description line prefix)
                     results))))))
@@ -169,7 +169,7 @@ Used for navigating LaTeX warnings in the log file."
                                     (goto-char (point-min))
                                     (forward-line (1- line))
                                     ;; should probably just delete any
-                                    ;; "..." at beginning
+                                    ;; "..." at beginning?
                                     (let ((truncated-prefix
                                            (substring prefix
                                                       (max 0 (- (length prefix)
@@ -200,21 +200,21 @@ the log file is newer than the current buffer."
 (defun czm-tex-compile-report (report-fn)
   "Call REPORT-FN if the current buffer is fresh."
   (let* ((log-data (czm-tex-compile-process-log))
-           (diags (mapcar
-                   (lambda (datum)
-                     (cl-destructuring-bind (error-p description region)
-                         datum
-                       (flymake-make-diagnostic
-                        (current-buffer)
-                        (car region)
-                        (cdr region)
-                        (if error-p
-                            :error
-                          :warning)
-                        description)))
-                   log-data)))
-      (funcall report-fn diags)
-      t))
+         (diags (mapcar
+                 (lambda (datum)
+                   (cl-destructuring-bind (error-p description region)
+                       datum
+                     (flymake-make-diagnostic
+                      (current-buffer)
+                      (car region)
+                      (cdr region)
+                      (if error-p
+                          :error
+                        :warning)
+                      description)))
+                 log-data)))
+    (funcall report-fn diags)
+    t))
 
 (defun czm-tex-compile-report-if-fresh (report-fn)
   "Call REPORT-FN if the current buffer is fresh."
@@ -236,7 +236,8 @@ the log file is newer than the current buffer."
 If EVENT is `changed', then run `czm-tex-compile-log-timer-fn'
 one second from now, so that the log has enough time to fully
 update."
-  (when (eq (nth 1 event) 'changed)
+  (when (eq (nth 1 event)
+            'changed)
     (when czm-tex-compile-log-watch-timer
       (cancel-timer czm-tex-compile-log-watch-timer))
     (setq-local czm-tex-compile-log-watch-timer
