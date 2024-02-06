@@ -134,9 +134,8 @@ Used for navigating LaTeX warnings in the log file."
                              (with-temp-buffer
                                (insert (nth 5 item))
                                (goto-char (point-min))
-                               (when (re-search-forward "^\nl\\.\\([0-9]+\\) " nil t)
-                                 (setq line (when (match-string 1)
-                                              (string-to-number (match-string 1))))
+                               (setq line (nth 2 item))
+                               (when (re-search-forward "\nl\\.\\([0-9]+\\) " nil t)
 		                               (setq prefix (buffer-substring-no-properties (point)
                                                                               (line-end-position)))))
 	                          (when (string-match "input line \\([0-9]+\\)" description)
