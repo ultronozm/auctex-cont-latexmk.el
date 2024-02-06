@@ -124,7 +124,10 @@ Used for navigating LaTeX warnings in the log file."
                               (description-raw (nth (if error-p 3 5) item))
                               (description (if error-p description-raw
                                              (substring description-raw
-                                                        (length "LaTeX Warning: ") -1)))
+                                                        0
+                                                        ;; (progn (string-match " Warning: " description-raw)
+                                                        ;;        (match-end 0))
+                                                        -1)))
                               line prefix
                               region)
                          (if error-p
