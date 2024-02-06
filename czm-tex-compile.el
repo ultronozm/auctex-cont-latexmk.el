@@ -97,15 +97,15 @@ Used for navigating LaTeX warnings in the log file."
 	              (point))))
     (replace-regexp-in-string "\n" "" (buffer-substring-no-properties beg end))))
 
+
+(require 'tex)
+
 (defun czm-tex-compile-process-log ()
   "Process the log file for the current LaTeX document."
   (let* ((current-buf (current-buffer))
          (tex-file (buffer-file-name))
 	        (log-file (concat (file-name-sans-extension tex-file)
-                           ".log"))
-         (error-prefix "! ")
-         (warning-prefix "LaTeX Warning: ")
-	        results)
+                           ".log")))
     (with-temp-buffer
       (insert-file-contents log-file)
       (let* ((error-list (progn (TeX-parse-all-errors)
@@ -128,8 +128,7 @@ Used for navigating LaTeX warnings in the log file."
                                                         ;; (progn (string-match " Warning: " description-raw)
                                                         ;;        (match-end 0))
                                                         -1)))
-                              line prefix
-                              region)
+                              line prefix)
                          (if error-p
                              (with-temp-buffer
                                (insert (nth 5 item))
@@ -200,8 +199,7 @@ the log file is newer than the current buffer."
                       description)))
                  (seq-filter
                   (lambda (datum)
-                    (not (null (nth 2 datum)))
-                    )
+                    (not (null (nth 2 datum))))
                   log-data))))
     (funcall report-fn diags)
     t))
@@ -256,10 +254,12 @@ ARGS are the keyword-value pairs concerning edits"
             nil t))
 
 (defun czm-tex-compile-restrict-flymake-backends ()
+  "Restrict flymake backends to `czm-tex-compile-flymake'."
   (interactive)
   (setq flymake-diagnostic-functions '(czm-tex-compile-flymake t)))
 
 (defun czm-tex-compile-relax-flymake-backends ()
+  "Relax flymake backends to include `LaTeX-flymake'."
   (interactive)
   (setq flymake-diagnostic-functions '(czm-tex-compile-flymake LaTeX-flymake t)))
 
