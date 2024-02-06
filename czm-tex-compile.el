@@ -112,8 +112,10 @@ Used for navigating LaTeX warnings in the log file."
                                 TeX-error-list))
              (filtered (seq-filter
                         (lambda (item)
-                          (equal (expand-file-name (nth 1 item))
-                                 (expand-file-name tex-file)))
+                          (and
+                           (stringp (nth 1 item))
+                           (equal (expand-file-name (nth 1 item))
+                                  (expand-file-name tex-file))))
                         error-list))
              (stuff (mapcar
                      (lambda (item)
