@@ -5,7 +5,7 @@
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
 ;; Version: 0.0
 ;; URL: https://github.com/ultronozm/czm-tex-compile.el
-;; Package-Requires: ((emacs "29.1"))
+;; Package-Requires: ((emacs "29.1") (auctex))
 ;; Keywords: tex
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -23,82 +23,106 @@
 
 ;;; Commentary:
 
-;; This package provides convenience functions for compiling a LaTeX
-;; document continuously via latexmk and navigating the errors and
-;; warnings recorded in the log file.  Customize the variable
-;; `czm-tex-compile-command' to change the command used to compile the
-;; document.
+;; This package provides a minor mode that compiles a LaTeX document
+;; via latexmk and reports errors and warnings to a `flymake' backend.
+;; Customize the variable `czm-tex-compile-command' to change the
+;; command used to compile the document.
 ;;
 ;; My use-package declaration:
 ;;
 ;; (use-package czm-tex-compile
-;;     :vc (:url "https://github.com/ultronozm/czm-tex-compile.el.git"
-;;               :rev :newest)
-;;     :after latex
-;;     :bind
-;;     ("C-c k" . czm-tex-compile)
-;;     ("s-]" . czm-tex-compile-next-error)
-;;     ("s-[" . czm-tex-compile-previous-error))
+;;   :elpaca (:host github :repo "ultronozm/czm-tex-compile.el"
+;;                  :depth nil)
+;;   :bind
+;;   ("C-c k" . czm-tex-compile-toggle))
 
 ;;; Code:
 
 (require 'esh-mode)
 
+(defgroup czm-tex-compile nil
+  "Convenience functions for compiling LaTeX documents."
+  :group 'tex)
+
 (defcustom czm-tex-compile-command
   "latexmk -shell-escape -pvc -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
   "Command to compile LaTeX documents."
-  :type 'string
-  :group 'czm-tex-compile)
+  :type 'string)
 
-(defun czm-tex-compile--kill-buffer-hook ()
-  "Hook to kill the eshell buffer when the LaTeX buffer is killed."
-  (when (string-match "\\([^\.]+\\)\.tex" (buffer-name))
-    (let* ((name (match-string 1 (buffer-name)))
-           (bufname (concat "*eshell-" name "*")))
-      (when (get-buffer bufname)
-        (let ((kill-buffer-query-functions '()))
-          (with-current-buffer bufname
-            (eshell-interrupt-process))
-          (kill-buffer bufname))))))
+(defvar-local czm-tex-compile-process nil
+  "Process running the LaTeX compilation.")
+
+(defvar-local czm-tex-compile-log-watch-descriptor nil)
+(defvar-local czm-tex-compile-report-fn nil)
+(defvar-local czm-tex-compile-log-watch-timer nil)
+(defvar-local czm-tex-compile--compilation-buffer-name nil)
 
 ;;;###autoload
-(defun czm-tex-compile ()
-  "Compile the current LaTeX document in an eshell buffer.
-If the eshell buffer already exists, switch to it.  Otherwise,
-create a new eshell buffer and compile the document in it.  The
-eshell buffer is named *eshell-<name>*, where <name>.tex is the
-name of the current LaTeX file."
+(define-minor-mode czm-tex-compile-mode
+  "If enabled, run LaTeX compilation on the current buffer."
+  :lighter " TexC"
+  (if czm-tex-compile-mode
+      (let ((name (and (string-match "\\([^\.]+\\)\.tex" (buffer-name))
+                       (match-string 1 (buffer-name)))))
+        (unless name
+          (user-error "Buffer name does not match expected pattern"))
+        (when (process-live-p czm-tex-compile-process)
+          (interrupt-process czm-tex-compile-process)
+          (sit-for 1)
+          (delete-process czm-tex-compile-process))
+        (setq czm-tex-compile--compilation-buffer-name (concat "*czm-tex-compile-" name "*"))
+        (let ((command (concat czm-tex-compile-command " " name ".tex")))
+          (setq czm-tex-compile-process
+                (start-process-shell-command "czm-tex-compile" czm-tex-compile--compilation-buffer-name
+                                             command)))
+        (add-hook 'kill-buffer-hook 'czm-tex-compile--kill-process nil t)
+        (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t))
+    (czm-tex-compile--kill-process)
+    (when czm-tex-compile-log-watch-descriptor
+      (file-notify-rm-watch czm-tex-compile-log-watch-descriptor)
+      (setq czm-tex-compile-log-watch-descriptor nil))
+    (when czm-tex-compile-log-watch-timer
+      (cancel-timer czm-tex-compile-log-watch-timer)
+      (setq czm-tex-compile-log-watch-timer nil))
+    (when czm-tex-compile-report-fn
+      (setq czm-tex-compile-report-fn nil))))
+
+;;;###autoload
+(defun czm-tex-compile-toggle ()
+  "Toggle `czm-tex-compile-mode', and also `flymake'."
   (interactive)
-  (when (string-match "\\([^\.]+\\)\.tex" (buffer-name))
-    (let* ((name (match-string 1 (buffer-name)))
-           (bufname (concat "*eshell-" name "*")))
-      (czm-tex-compile-restrict-flymake-backends)
-      ;; (czm-tex-compile-setup-flymake-backend)
-      (if (get-buffer bufname)
-	         (switch-to-buffer bufname)
-	       (save-window-excursion
-          (add-hook 'kill-buffer-hook #'czm-tex-compile--kill-buffer-hook)
-	         (eshell "new")
-	         (rename-buffer bufname)
-	         (insert (concat czm-tex-compile-command " " name ".tex"))
-	         (eshell-send-input))))))
+  (if czm-tex-compile-mode
+      (progn
+        (czm-tex-compile-mode 0)
+        (flymake-mode 0)
+        (czm-tex-compile-relax-flymake-backends)
+        (message "czm-tex-compile-mode and flymake-mode disabled"))
+    (czm-tex-compile-mode 1)
+    (czm-tex-compile-restrict-flymake-backends)
+    (flymake-mode 1)
+    (message "czm-tex-compile-mode and flymake-mode enabled")))
 
-(defvar-local czm-tex-compile--log-state nil
-  "Cons containing last navigation time and log file position.")
 
-;; maybe delete this?
-(defun czm-tex-compile--paragraph-as-line ()
-  "Return the current paragraph as a single line.
-Used for navigating LaTeX warnings in the log file."
-  (interactive)
-  (let ((beg (point))
-	       (end (save-excursion
-	              (forward-paragraph)
-	              (point))))
-    (replace-regexp-in-string "\n" "" (buffer-substring-no-properties beg end))))
-
+(defun czm-tex-compile--kill-process ()
+  "Kill the LaTeX compilation process associated with the buffer."
+  (when (process-live-p czm-tex-compile-process)
+    (interrupt-process czm-tex-compile-process)
+    (sit-for 1)
+    (delete-process czm-tex-compile-process))
+  (when (get-buffer czm-tex-compile--compilation-buffer-name)
+    (kill-buffer czm-tex-compile--compilation-buffer-name)))
 
 (require 'tex)
+
+
+(defun testing ()
+  (interactive)
+  (while (re-search-forward "Warning:" nil t)
+    ;; make it all appear on one line
+    (end-of-line)
+    (while (not (looking-at "\n\n"))
+      (delete-char 1)
+      (end-of-line))))
 
 (defun czm-tex-compile-process-log ()
   "Process the log file for the current LaTeX document."
@@ -108,6 +132,13 @@ Used for navigating LaTeX warnings in the log file."
                            ".log")))
     (with-temp-buffer
       (insert-file-contents log-file)
+      (goto-char (point-min))
+      (while (re-search-forward "Warning:" nil t)
+        ;; make it all appear on one line
+        (end-of-line)
+        (while (not (looking-at "\n\n"))
+          (delete-char 1)
+          (end-of-line)))
       (let* ((error-list (progn (TeX-parse-all-errors)
                                 TeX-error-list))
              (filtered (seq-filter
@@ -189,14 +220,11 @@ the log file is newer than the current buffer."
                  (lambda (datum)
                    (cl-destructuring-bind (error-p description region)
                        datum
-                     (flymake-make-diagnostic
-                      (current-buffer)
-                      (car region)
-                      (cdr region)
-                      (if error-p
-                          :error
-                        :warning)
-                      description)))
+                     (flymake-make-diagnostic (current-buffer)
+                                              (car region)
+                                              (cdr region)
+                                              (if error-p :error :warning)
+                                              description)))
                  (seq-filter
                   (lambda (datum)
                     (not (null (nth 2 datum))))
@@ -204,20 +232,17 @@ the log file is newer than the current buffer."
     (funcall report-fn diags)
     t))
 
-(defun czm-tex-compile-report-if-fresh (report-fn)
+(defun czm-tex-compile-report-if-fresh ()
   "Call REPORT-FN if the current buffer is fresh."
-  (when (czm-tex-compile--fresh-p)
-    (czm-tex-compile-report report-fn)))
-
-(defvar czm-tex-compile-log-watch-descriptor nil)
-(defvar czm-tex-compile-report-fn nil)
-(defvar czm-tex-compile-log-watch-timer nil)
+  (when (and czm-tex-compile-report-fn
+             (czm-tex-compile--fresh-p))
+    (czm-tex-compile-report czm-tex-compile-report-fn)))
 
 (defun czm-tex-compile-log-timer-fn ()
   "Call `czm-tex-compile-report-if-fresh' and cancels the timer."
   (when czm-tex-compile-log-watch-timer
     (cancel-timer czm-tex-compile-log-watch-timer))
-  (czm-tex-compile-report-if-fresh czm-tex-compile-report-fn))
+  (czm-tex-compile-report-if-fresh))
 
 (defun czm-tex-compile-log-change-handler (event)
   "Handle EVENT from log watcher.
@@ -228,8 +253,8 @@ update."
             'changed)
     (when czm-tex-compile-log-watch-timer
       (cancel-timer czm-tex-compile-log-watch-timer))
-    (setq-local czm-tex-compile-log-watch-timer
-                (run-with-timer 1 1 #'czm-tex-compile-log-timer-fn))))
+    (setq czm-tex-compile-log-watch-timer
+          (run-with-timer 1 1 #'czm-tex-compile-log-timer-fn))))
 
 (require 'filenotify)
 
@@ -237,31 +262,27 @@ update."
   "Flymake backend for LaTeX based on latexmk.
 REPORT-FN is the function called to report diagnostics.
 ARGS are the keyword-value pairs concerning edits"
-  (czm-tex-compile-report-if-fresh report-fn)
-  (setq-local czm-tex-compile-report-fn report-fn)
-  (when czm-tex-compile-log-watch-descriptor
-    (file-notify-rm-watch czm-tex-compile-log-watch-descriptor))
-  (setq-local czm-tex-compile-log-watch-descriptor
-              (file-notify-add-watch
-               (concat (file-name-sans-extension (buffer-file-name))
-                       ".log")
-               '(change)
-               #'czm-tex-compile-log-change-handler)))
-
-(defun czm-tex-compile-setup-flymake-backend ()
-  "Setup flymake backend."
-  (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake
-            nil t))
+  (when (czm-tex-compile-mode)
+    (setq czm-tex-compile-report-fn report-fn)
+    (czm-tex-compile-report-if-fresh)
+    (when czm-tex-compile-log-watch-descriptor
+      (file-notify-rm-watch czm-tex-compile-log-watch-descriptor))
+    (setq czm-tex-compile-log-watch-descriptor
+          (file-notify-add-watch
+           (concat (file-name-sans-extension (buffer-file-name))
+                   ".log")
+           '(change)
+           #'czm-tex-compile-log-change-handler))))
 
 (defun czm-tex-compile-restrict-flymake-backends ()
   "Restrict flymake backends to `czm-tex-compile-flymake'."
   (interactive)
-  (setq flymake-diagnostic-functions '(czm-tex-compile-flymake t)))
+  (setq-local flymake-diagnostic-functions '(czm-tex-compile-flymake t)))
 
 (defun czm-tex-compile-relax-flymake-backends ()
   "Relax flymake backends to include `LaTeX-flymake'."
   (interactive)
-  (setq flymake-diagnostic-functions '(czm-tex-compile-flymake LaTeX-flymake t)))
+  (setq-local flymake-diagnostic-functions '(czm-tex-compile-flymake LaTeX-flymake t)))
 
 
 
