@@ -78,8 +78,16 @@
                                                                "*"))
         (let ((command (concat czm-tex-compile-command " " name ".tex")))
           (setq czm-tex-compile--process
-                (start-process-shell-command "czm-tex-compile" czm-tex-compile--compilation-buffer-name
-                                             command)))
+                (start-process-shell-command
+                 "czm-tex-compile" czm-tex-compile--compilation-buffer-name
+                 command)))
+        (let ((current-buf (current-buffer)))
+          (with-current-buffer (get-buffer czm-tex-compile--compilation-buffer-name)
+            (special-mode)
+            (local-set-key (kbd "TAB")
+                           (lambda ()
+                             (interactive)
+                             (set-window-buffer (selected-window) current-buf)))))
         (add-hook 'kill-buffer-hook 'czm-tex-compile--kill-process nil t)
         (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t)
         (when czm-tex-compile--log-watch-timer
