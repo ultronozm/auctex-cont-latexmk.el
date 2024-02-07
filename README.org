@@ -8,8 +8,8 @@ This package provides a minor mode where [[https://ctan.org/pkg/latexmk?lang=en]
 Download this repository, install using =M-x package-install-file= (or package-vc-install, straight, elpaca, ...), and add something like the following to your [[https://www.emacswiki.org/emacs/InitFile][init file]]:
 #+begin_src elisp
 (use-package czm-tex-compile
-    :bind
-    ("C-c k" . czm-tex-compile-toggle))
+  :bind
+  ("C-c k" . czm-tex-compile-toggle))
 #+end_src
 Replace the keybinding with whatever you prefer (or delete it and just run the command via =M-x=).
 
@@ -17,6 +17,23 @@ You can tweak the underlying =latexmk= command via =M-x customize-variable czm-t
 
 The command =czm-tex-compile-toggle= behaves the way that I prefer -- it enables both =czm-tex-compile-mode= and =flymake-mode=, restricting the backends for the latter to those coming from the former.  Depending upon your preferences, you may wish to write your own "wrapper" for =czm-tex-compile-mode= akin to =czm-tex-compile-toggle=.
 
-The way the Flymake backend works, it will update only when the latexmk process reaches a "watching for changes" state and the buffer is unmodified.  The workflow is thus to save the file and then wait a few seconds before editing further, then to use Flymake to navigate the errors.  I also use =(setq flymake-show-diagnostics-at-end-of-line t)=, which displays the error/warning messages in the buffer itself.
+The way the Flymake backend works, it will update only when the latexmk process reaches a "watching for changes" state and the buffer is unmodified.  The workflow is thus to save the file, wait a few seconds for the compilation to complete, and then to use Flymake to navigate the errors.  I configure Flymake to use =M-n= and =M-p= for navigation, and also use =(setq flymake-show-diagnostics-at-end-of-line t)=, which displays the error/warning messages in the buffer itself rather than just in the minibuffer.  Here's something closer to my complete config (delete the "elpaca" entries if you don't use that):
+
+#+begin_src elisp
+(use-package flymake
+  :elpaca nil
+  :custom
+  (flymake-show-diagnostics-at-end-of-line t)
+  :bind
+  (:map flymake-mode-map
+        ("M-n" . flymake-goto-next-error)
+        ("M-p" . flymake-goto-prev-error)))
+
+(use-package czm-tex-compile
+  :elpaca (:host github :repo "ultronozm/czm-tex-compile.el"
+                 :depth nil)
+  :bind
+  ("C-c k" . czm-tex-compile-toggle))
+#+end_src
 
 That's all.  I prefer this workflow to the alternative in which one compiles the document manually via =TeX-command-master= (=C-c C-c=) and navigates the warning/error messages using =next-error= (=M-n=) and =previous-error= (=M-p=).  It also gives a handy way to keep the .aux files up-to-date; I take advantage of this feature in the packages [[https://github.com/ultronozm/czm-preview.el][czm-preview.el]] and [[https://github.com/ultronozm/czm-tex-fold.el][czm-tex-fold.el]] to annotate the TeX buffer with label numbers.
