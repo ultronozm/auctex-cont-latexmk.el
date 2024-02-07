@@ -17,4 +17,6 @@ You can tweak underlying the =latexmk= command via =M-x customize-variable czm-t
 
 The command =czm-tex-compile-toggle= behaves the way that I prefer -- it enables both =czm-tex-compile-mode= and =flymake-mode=, restricting the backends for the latter to those coming from the former.  Depending upon your preferences, you may wish to write your own "wrapper" for =czm-tex-compile-mode= akin to =czm-tex-compile-toggle=.
 
+The way the Flymake backend works, it will update only when the latexmk process reaches a "watching for changes" state and the buffer is unmodified.  The workflow to have errors and warnings reported is to save the file and wait a few seconds without editing.
+
 That's all.  I prefer this workflow to the alternative in which one compiles the document manually via =TeX-command-master= (=C-c C-c=) and navigates the warning/error messages using =next-error= (=M-n=) and =previous-error= (=M-p=).  It also gives a handy way to keep the .aux files up-to-date; I take advantage of this feature in the packages [[https://github.com/ultronozm/czm-preview.el][czm-preview.el]] and [[https://github.com/ultronozm/czm-tex-fold.el][czm-tex-fold.el]] to annotate the TeX buffer with label numbers.
