@@ -68,7 +68,7 @@
           (user-error "Buffer name does not match expected pattern"))
         (when (process-live-p czm-tex-compile-process)
           (interrupt-process czm-tex-compile-process)
-          (sit-for 1)
+          (sit-for 0.1)
           (delete-process czm-tex-compile-process))
         (setq czm-tex-compile--compilation-buffer-name (concat "*czm-tex-compile-" name "*"))
         (let ((command (concat czm-tex-compile-command " " name ".tex")))
@@ -107,7 +107,7 @@
   "Kill the LaTeX compilation process associated with the buffer."
   (when (process-live-p czm-tex-compile-process)
     (interrupt-process czm-tex-compile-process)
-    (sit-for 1)
+    (sit-for 0.1)
     (delete-process czm-tex-compile-process))
   (when (get-buffer czm-tex-compile--compilation-buffer-name)
     (kill-buffer czm-tex-compile--compilation-buffer-name)))
