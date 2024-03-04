@@ -84,10 +84,11 @@
         (let ((current-buf (current-buffer)))
           (with-current-buffer (get-buffer czm-tex-compile--compilation-buffer-name)
             (special-mode)
+            (setq-local czm-tex-compile--parent-buffer current-buf)
             (local-set-key (kbd "TAB")
                            (lambda ()
                              (interactive)
-                             (set-window-buffer (selected-window) current-buf)))))
+                             (set-window-buffer (selected-window) czm-tex-compile--parent-buffer)))))
         (add-hook 'kill-buffer-hook 'czm-tex-compile--kill-process nil t)
         (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t)
         (when czm-tex-compile--log-watch-timer
