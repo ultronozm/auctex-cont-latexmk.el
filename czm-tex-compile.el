@@ -171,7 +171,7 @@ cell (BEG . END) indicating where the error happens."
                (line (nth 2 item))
                (message (nth 3 item))
                (context (nth 5 item))
-               (search-string (nth 6 item))
+               (_search-string (nth 6 item))
                (is-bad-box (nth 8 item)))
            (when (and (stringp file)
                       (or (equal (expand-file-name file)
