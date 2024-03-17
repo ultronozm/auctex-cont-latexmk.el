@@ -1,4 +1,4 @@
-#+title: czm-tex-compile.el: Convenience functions for compiling LaTeX
+#+title: czm-tex-compile.el: run latexmk continuously, report errors via flymake
 #+author: Paul Nelson
 
 * Overview

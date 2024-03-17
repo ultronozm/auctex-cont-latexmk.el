@@ -1,4 +1,4 @@
-;;; czm-tex-compile.el --- Convenience functions for compiling LaTeX  -*- lexical-binding: t; -*-
+;;; czm-tex-compile.el --- run latexmk continuously, report errors via flymake  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Paul D. Nelson
 
@@ -300,7 +300,7 @@ latexmk compilation is in a \"Watching\" state."
 (defun czm-tex-compile-flymake (report-fn &rest _args)
   "Flymake backend for LaTeX based on latexmk.
 Save REPORT-FN in a local variable, called by
-`czm-tex-compile--log-watch-timer' to report diagnostics."
+e`czm-tex-compile--log-watch-timer' to report diagnostics."
   (when (czm-tex-compile-mode)
     (setq czm-tex-compile--report-fn report-fn)))
 
