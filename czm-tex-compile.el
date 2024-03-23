@@ -47,7 +47,8 @@
 (defcustom czm-tex-compile-command
   "latexmk -shell-escape -pvc -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
   "Command to compile LaTeX documents."
-  :type 'string)
+  :type 'string
+  :group 'czm-tex-compile)
 
 (defvar-local czm-tex-compile--process nil
   "Process running the LaTeX compilation.")
@@ -139,12 +140,12 @@ Also kill the timer for watching the log file."
 (defcustom czm-tex-compile-report-hbox-errors nil
   "Non-nil means report hbox errors via flymake."
   :type 'boolean
-  :group 'czm-tex)
+  :group 'czm-tex-compile)
 
 (defcustom czm-tex-compile-report-multiple-labels t
   "Non-nil means report multiple label errors via flymake."
   :type 'boolean
-  :group 'czm-tex)
+  :group 'czm-tex-compile)
 
 
 (defun czm-tex-compile--parse-log-buffer (log-file)
