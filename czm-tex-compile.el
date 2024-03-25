@@ -197,8 +197,12 @@ nil if the error is not found."
                        (let ((truncated-prefix
                               (substring prefix
                                          (max 0 (- (length prefix)
-                                                   3)))))
-                         (search-forward truncated-prefix nil t)))))))
+                                                   3))))
+                             (line-end (line-end-position))
+                             (bol (point)))
+                         (or
+                          (search-forward truncated-prefix line-end t)
+                          bol)))))))
         (when pos
           (cons pos (1+ pos)))))))
 
