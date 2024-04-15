@@ -60,44 +60,59 @@
 (defvar-local czm-tex-compile--compilation-buffer-name nil
   "Name of the buffer used for LaTeX compilation.")
 
+(defun czm-tex-compile--kill-process ()
+  "Kill the LaTeX compilation process associated with the buffer.
+Also kill the timer for watching the log file."
+  (when (process-live-p czm-tex-compile--process)
+    (interrupt-process czm-tex-compile--process)
+    (sit-for 0.1)
+    (delete-process czm-tex-compile--process))
+  (when (get-buffer czm-tex-compile--compilation-buffer-name)
+    (kill-buffer czm-tex-compile--compilation-buffer-name))
+  (when czm-tex-compile--log-watch-timer
+    (cancel-timer czm-tex-compile--log-watch-timer)
+    (setq czm-tex-compile--log-watch-timer nil)))
+
 ;;;###autoload
 (define-minor-mode czm-tex-compile-mode
   "If enabled, run LaTeX compilation on the current buffer."
   :lighter nil
-  (if czm-tex-compile-mode
-      (let ((name (and (string-match "\\([^\.]+\\)\.tex" (buffer-name))
-                       (match-string 1 (buffer-name)))))
-        (unless name
-          (user-error "Buffer name does not match expected pattern"))
-        (when (process-live-p czm-tex-compile--process)
-          (interrupt-process czm-tex-compile--process)
-          (sit-for 0.1)
-          (delete-process czm-tex-compile--process))
-        (setq czm-tex-compile--compilation-buffer-name (concat "*czm-tex-compile-" (expand-file-name name)
-                                                               "*"))
-        (let ((command (concat czm-tex-compile-command " " name ".tex")))
-          (setq czm-tex-compile--process
-                (start-process-shell-command
-                 "czm-tex-compile" czm-tex-compile--compilation-buffer-name
-                 command)))
-        (let ((current-buf (current-buffer)))
-          (with-current-buffer (get-buffer czm-tex-compile--compilation-buffer-name)
-            (special-mode)
-            (setq-local czm-tex-compile--parent-buffer current-buf)
-            (local-set-key (kbd "TAB")
-                           (lambda ()
-                             (interactive)
-                             (set-window-buffer (selected-window) czm-tex-compile--parent-buffer)))))
-        (add-hook 'kill-buffer-hook 'czm-tex-compile--kill-process nil t)
-        (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t)
-        (when czm-tex-compile--log-watch-timer
-          (cancel-timer czm-tex-compile--log-watch-timer)
-          (setq czm-tex-compile--log-watch-timer nil))
-        (setq czm-tex-compile--log-watch-timer
-              (run-with-timer 2 1 #'czm-tex-compile-report-if-fresh)))
+  (cond
+   (czm-tex-compile-mode
+    (let ((name (and (string-match "\\([^\.]+\\)\.tex" (buffer-name))
+                     (match-string 1 (buffer-name)))))
+      (unless name
+        (user-error "Buffer name does not match expected pattern"))
+      (when (process-live-p czm-tex-compile--process)
+        (interrupt-process czm-tex-compile--process)
+        (sit-for 0.1)
+        (delete-process czm-tex-compile--process))
+      (setq czm-tex-compile--compilation-buffer-name (concat "*czm-tex-compile-" (expand-file-name name)
+                                                             "*"))
+      (let ((command (concat czm-tex-compile-command " " name ".tex")))
+        (setq czm-tex-compile--process
+              (start-process-shell-command
+               "czm-tex-compile" czm-tex-compile--compilation-buffer-name
+               command)))
+      (let ((current-buf (current-buffer)))
+        (with-current-buffer (get-buffer czm-tex-compile--compilation-buffer-name)
+          (special-mode)
+          (setq-local czm-tex-compile--parent-buffer current-buf)
+          (local-set-key (kbd "TAB")
+                         (lambda ()
+                           (interactive)
+                           (set-window-buffer (selected-window) czm-tex-compile--parent-buffer)))))
+      (add-hook 'kill-buffer-hook 'czm-tex-compile--kill-process nil t)
+      (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t)
+      (when czm-tex-compile--log-watch-timer
+        (cancel-timer czm-tex-compile--log-watch-timer)
+        (setq czm-tex-compile--log-watch-timer nil))
+      (setq czm-tex-compile--log-watch-timer
+            (run-with-timer 2 1 #'czm-tex-compile-report-if-fresh))))
+   (t
     (czm-tex-compile--kill-process)
     (when czm-tex-compile--report-fn
-      (setq czm-tex-compile--report-fn nil))))
+      (setq czm-tex-compile--report-fn nil)))))
 
 (defvar-local czm-tex-compile--old-flymake-diagnostic-functions nil
   "Value of `flymake-diagnostic-functions' before calling `czm-tex-compile-toggle'.")
@@ -120,20 +135,15 @@
     (message "czm-tex-compile-mode and flymake-mode enabled")))
 
 
-(defun czm-tex-compile--kill-process ()
-  "Kill the LaTeX compilation process associated with the buffer.
-Also kill the timer for watching the log file."
-  (when (process-live-p czm-tex-compile--process)
-    (interrupt-process czm-tex-compile--process)
-    (sit-for 0.1)
-    (delete-process czm-tex-compile--process))
-  (when (get-buffer czm-tex-compile--compilation-buffer-name)
-    (kill-buffer czm-tex-compile--compilation-buffer-name))
-  (when czm-tex-compile--log-watch-timer
-    (cancel-timer czm-tex-compile--log-watch-timer)
-    (setq czm-tex-compile--log-watch-timer nil)))
 
 (require 'tex)
+
+
+(defcustom czm-tex-compile-ignored-warnings
+  '("Package hyperref Warning: Token not allowed in a PDF string"
+    "Overfull \\hbox" "Underfull \\hbox")
+  "List of warnings to ignore when parsing LaTeX log files."
+  :type '(repeat string))
 
 (defcustom czm-tex-compile-report-hbox-errors nil
   "Non-nil means report hbox errors via flymake."
@@ -144,7 +154,6 @@ Also kill the timer for watching the log file."
   "Non-nil means report multiple label errors via flymake."
   :type 'boolean
   :group 'czm-tex-compile)
-
 
 (defun czm-tex-compile--parse-log-buffer (log-file)
   "Retrieve parsed TeX error list from LOG-FILE."
@@ -217,14 +226,18 @@ return value of `czm-tex-compile-process-log'."
            (context (nth 5 item))
            (_search-string (nth 6 item))
            (is-bad-box (nth 8 item)))
-       (when (and (stringp file)
-                  (or (equal (expand-file-name file)
-                             (expand-file-name tex-file))
-                      (and czm-tex-compile-report-multiple-labels
-                           (string-match-p "multiply defined" message)
-                           (string-match-p "\\.aux$" file)))
-                  (or (not is-bad-box)
-                      czm-tex-compile-report-hbox-errors))
+       (when (and
+              (not (cl-some (lambda (ignored)
+                              (string-match-p ignored message))
+                            czm-tex-compile-ignored-warnings))
+              (stringp file)
+              (or (equal (expand-file-name file)
+                         (expand-file-name tex-file))
+                  (and czm-tex-compile-report-multiple-labels
+                       (string-match-p "multiply defined" message)
+                       (string-match-p "\\.aux$" file)))
+              (or (not is-bad-box)
+                  czm-tex-compile-report-hbox-errors))
          (list (eq type 'error)
                (replace-regexp-in-string "\n" "" message)
                (if (and (not (eq type 'error))
