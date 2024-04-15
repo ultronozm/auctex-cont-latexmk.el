@@ -38,8 +38,6 @@
 
 ;;; Code:
 
-(require 'esh-mode)
-
 (defgroup czm-tex-compile nil
   "Convenience functions for compiling LaTeX documents."
   :group 'tex)
