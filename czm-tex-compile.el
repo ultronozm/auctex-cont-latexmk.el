@@ -95,51 +95,43 @@ Also kill the timer for watching the log file."
   :type 'boolean
   :group 'czm-tex-compile)
 
-(defun czm-tex-compile--process-multiply-defined-warning (message buf)
+(defun czm-tex-compile--process-multiply-defined-warning (message)
   "Get position of multiply defined MESSAGE labels in BUF."
   (let ((label (progn
                  (string-match "`\\(.*\\)'" message)
                  (match-string 1 message))))
-    (with-current-buffer buf
-      (save-excursion
-        (save-restriction
-          (widen)
-          (goto-char (point-min))
-          (when (re-search-forward (concat "\\\\label{" label "}")
-                                   nil t)
-            (cons (line-beginning-position)
-                  (line-end-position))))))))
+    (save-excursion
+      (save-restriction
+        (widen)
+        (goto-char (point-min))
+        (when (re-search-forward (concat "\\\\label{" label "}")
+                                 nil t)
+          (cons (line-beginning-position)
+                (line-end-position)))))))
 
-(defun czm-tex-compile--process-regular-error (context line current-buf)
-  "Get position of error and handle CONTEXT and LINE in CURRENT-BUF.
+(defun czm-tex-compile--process-regular-error (context line)
+  "Get position of error and handle CONTEXT and LINE.
 Return a cons cell (BEG . END) indicating where the error happens, or
 nil if the error is not found."
-  (let ((prefix nil))
-    (with-temp-buffer
-      (insert context)
-      (goto-char (point-min))
-      (when (re-search-forward "\nl\\.\\([0-9]+\\) " nil t)
-        (setq prefix (buffer-substring-no-properties (point)
-                                                     (line-end-position)))))
-    (when prefix
-      (let ((pos
-             (with-current-buffer current-buf
+  (when-let* ((prefix (with-temp-buffer
+                        (insert context)
+                        (goto-char (point-min))
+                        (when (re-search-forward "\nl\\.\\([0-9]+\\) " nil t)
+                          (buffer-substring-no-properties
+                           (point) (line-end-position)))))
+              (pos
                (save-excursion
                  (save-restriction
                    (widen)
                    (goto-char (point-min))
                    (forward-line (1- line))
                    (let ((truncated-prefix
-                          (substring prefix
-                                     (max 0 (- (length prefix)
-                                               3))))
+                          (substring prefix (max 0 (- (length prefix) 3))))
                          (line-end (line-end-position))
                          (bol (point)))
-                     (or
-                      (search-forward truncated-prefix line-end t)
-                      bol)))))))
-        (when pos
-          (cons pos (1+ pos)))))))
+                     (or (search-forward truncated-prefix line-end t)
+                         bol))))))
+    (cons pos (1+ pos))))
 
 (defun czm-tex-compile--error-list (log-file)
   "Retrieve parsed TeX error list from LOG-FILE."
@@ -160,7 +152,7 @@ warning, DESCRIPTION is what you'd expect, and REGION is a cons
 cell (BEG . END) indicating where the error happens."
   (mapcar
    (lambda (item)
-     (let ((type (nth 0 item))
+     (let ((error-p (eq (nth 0 item) 'error))
            (file (nth 1 item))
            (line (nth 2 item))
            (message (nth 3 item))
@@ -179,24 +171,15 @@ cell (BEG . END) indicating where the error happens."
                 (stringp file)
                 (or (not is-bad-box)
                     czm-tex-compile-report-hbox-errors)
-                (if (eq type 'error)
-                    (czm-tex-compile--process-regular-error context line (current-buffer))
+                (if error-p
+                    (czm-tex-compile--process-regular-error context line)
                   (flymake-diag-region (current-buffer) line))))
               ((file-equal-p file (TeX-master-file "aux"))
                (and czm-tex-compile-report-multiple-labels
                     (string-match-p "multiply defined" message)
-                    (not (eq type 'error))
-                    (let ((label (progn (string-match "`\\(.*\\)'" message)
-                                        (match-string 1 message))))
-                      (save-excursion
-                        (save-restriction
-                          (widen)
-                          (goto-char (point-min))
-                          (when (re-search-forward (concat "\\\\label{" label "}")
-                                                   nil t)
-                            (cons (line-beginning-position)
-                                  (line-end-position)))))))))))
-         (list (eq type 'error)
+                    (not error-p)
+                    (czm-tex-compile--process-multiply-defined-warning message))))))
+         (list error-p
                (replace-regexp-in-string "\n" "" message)
                region))))
    (czm-tex-compile--error-list (TeX-master-file "log"))))
