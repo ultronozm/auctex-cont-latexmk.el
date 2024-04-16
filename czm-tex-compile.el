@@ -167,6 +167,7 @@ return value of `czm-tex-compile-process-log'."
            (_search-string (nth 6 item))
            (is-bad-box (nth 8 item)))
        (when (and
+              line
               (not (cl-some (lambda (ignored)
                               (string-match-p ignored message))
                             czm-tex-compile-ignored-warnings))
