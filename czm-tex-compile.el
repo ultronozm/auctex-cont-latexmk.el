@@ -207,6 +207,9 @@ latexmk compilation is in a \"Watching\" state."
 
 (defun czm-tex-compile--timer-function ()
   "Report to the flymake backend if the current buffer is fresh."
+  (dolist (datum (czm-tex-compile-process-log))
+    (cl-assert (not (null (nth 2 datum))) nil
+               "Region is nil in datum: %S" datum))
   (when (and czm-tex-compile--report-fn (czm-tex-compile--fresh-p))
     (funcall
      czm-tex-compile--report-fn
@@ -217,9 +220,7 @@ latexmk compilation is in a \"Watching\" state."
            (current-buffer) (car region) (cdr region)
            (if error-p :error :warning)
            description)))
-      (seq-filter
-       (lambda (datum) (not (null (nth 2 datum))))
-       (czm-tex-compile-process-log))))))
+      (czm-tex-compile-process-log)))))
 
 (defvar czm-tex-compile-mode)
 
