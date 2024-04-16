@@ -81,8 +81,7 @@ Also kill the timer for watching the log file."
   "String indicating that latexmk is watching for updated files.")
 
 (defcustom czm-tex-compile-ignored-warnings
-  '("Package hyperref Warning: Token not allowed in a PDF string"
-    "Overfull \\hbox" "Underfull \\hbox")
+  '("Package hyperref Warning: Token not allowed in a PDF string")
   "List of warnings to ignore when parsing LaTeX log files."
   :type '(repeat string))
 
