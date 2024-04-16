@@ -122,21 +122,22 @@ nil if the error is not found."
         (setq prefix (buffer-substring-no-properties (point)
                                                      (line-end-position)))))
     (when prefix
-      (let ((pos (with-current-buffer current-buf
-                   (save-excursion
-                     (save-restriction
-                       (widen)
-                       (goto-char (point-min))
-                       (forward-line (1- line))
-                       (let ((truncated-prefix
-                              (substring prefix
-                                         (max 0 (- (length prefix)
-                                                   3))))
-                             (line-end (line-end-position))
-                             (bol (point)))
-                         (or
-                          (search-forward truncated-prefix line-end t)
-                          bol)))))))
+      (let ((pos
+             (with-current-buffer current-buf
+               (save-excursion
+                 (save-restriction
+                   (widen)
+                   (goto-char (point-min))
+                   (forward-line (1- line))
+                   (let ((truncated-prefix
+                          (substring prefix
+                                     (max 0 (- (length prefix)
+                                               3))))
+                         (line-end (line-end-position))
+                         (bol (point)))
+                     (or
+                      (search-forward truncated-prefix line-end t)
+                      bol)))))))
         (when pos
           (cons pos (1+ pos)))))))
 
@@ -157,41 +158,48 @@ Returns a list of triples (ERROR-P DESCRIPTION REGION), where
 ERROR-P is non-nil if the error is an error rather than a
 warning, DESCRIPTION is what you'd expect, and REGION is a cons
 cell (BEG . END) indicating where the error happens."
-  (let* ((current-buf (current-buffer))
-         (tex-file (buffer-file-name))
-         (log-file (concat (file-name-sans-extension tex-file) ".log"))
-         (error-list (czm-tex-compile--error-list log-file)))
-    (mapcar
-     (lambda (item)
-       (let ((type (nth 0 item))
-             (file (nth 1 item))
-             (line (nth 2 item))
-             (message (nth 3 item))
-             (context (nth 5 item))
-             (_search-string (nth 6 item))
-             (is-bad-box (nth 8 item)))
-         (when (and
+  (mapcar
+   (lambda (item)
+     (let ((type (nth 0 item))
+           (file (nth 1 item))
+           (line (nth 2 item))
+           (message (nth 3 item))
+           (context (nth 5 item))
+           (_search-string (nth 6 item))
+           (is-bad-box (nth 8 item)))
+       (when-let
+           ((region
+             (cond
+              ((file-equal-p file (buffer-file-name))
+               (and
                 line
                 (not (cl-some (lambda (ignored)
                                 (string-match-p ignored message))
                               czm-tex-compile-ignored-warnings))
                 (stringp file)
-                (or (equal (expand-file-name file)
-                           (expand-file-name tex-file))
-                    (and czm-tex-compile-report-multiple-labels
-                         (string-match-p "multiply defined" message)
-                         (string-match-p "\\.aux$" file)))
                 (or (not is-bad-box)
-                    czm-tex-compile-report-hbox-errors))
-           (list (eq type 'error)
-                 (replace-regexp-in-string "\n" "" message)
-                 (if (and (not (eq type 'error))
-                          (string-match-p "multiply defined" message))
-                     (czm-tex-compile--process-multiply-defined-warning message current-buf)
-                   (if (eq type 'error)
-                       (czm-tex-compile--process-regular-error context line current-buf)
-                     (flymake-diag-region current-buf line)))))))
-     error-list)))
+                    czm-tex-compile-report-hbox-errors)
+                (if (eq type 'error)
+                    (czm-tex-compile--process-regular-error context line (current-buffer))
+                  (flymake-diag-region (current-buffer) line))))
+              ((file-equal-p file (TeX-master-file "aux"))
+               (and czm-tex-compile-report-multiple-labels
+                    (string-match-p "multiply defined" message)
+                    (not (eq type 'error))
+                    (let ((label (progn (string-match "`\\(.*\\)'" message)
+                                        (match-string 1 message))))
+                      (save-excursion
+                        (save-restriction
+                          (widen)
+                          (goto-char (point-min))
+                          (when (re-search-forward (concat "\\\\label{" label "}")
+                                                   nil t)
+                            (cons (line-beginning-position)
+                                  (line-end-position)))))))))))
+         (list (eq type 'error)
+               (replace-regexp-in-string "\n" "" message)
+               region))))
+   (czm-tex-compile--error-list (TeX-master-file "log"))))
 
 (defun czm-tex-compile--fresh-p ()
   "Return non-nil if logged errors should apply to current buffer.
@@ -200,8 +208,7 @@ current buffer is a file, the current buffer has a log file, the
 log file is newer than the current buffer, and the current
 latexmk compilation is in a \"Watching\" state."
   (when-let* ((file (buffer-file-name))
-              (log-file (concat (file-name-sans-extension file)
-                                ".log")))
+              (log-file (TeX-master-file "log")))
     (and
      (when-let ((buf (get-buffer czm-tex-compile--compilation-buffer-name)))
        (with-current-buffer buf
