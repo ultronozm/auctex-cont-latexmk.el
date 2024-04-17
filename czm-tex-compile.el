@@ -46,7 +46,7 @@
   :group 'tex)
 
 (defcustom czm-tex-compile-command
-  "latexmk -shell-escape -pvc -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
+  "latexmk -pvc -shell-escape -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
   "Command to compile LaTeX documents."
   :type 'string
   :group 'czm-tex-compile)
@@ -178,7 +178,7 @@ cell (BEG . END) indicating where the error happens."
 (defun czm-tex-compile--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
   (let ((master (abbreviate-file-name (expand-file-name (TeX-master-file)))))
-    (format "*tex-pvc-%s*" master)))
+    (format "*pvc-%s*" master)))
 
 (defun czm-tex-compile--compilation-buffer ()
   "Return the buffer used for LaTeX compilation."
@@ -241,17 +241,18 @@ e`czm-tex-compile--timer' to report diagnostics."
   :lighter nil
   (cond
    (czm-tex-compile-mode
-    (if-let ((comp-buf (czm-tex-compile--compilation-buffer)))
-        (let ((buf (current-buffer)))
+    (let ((buf (current-buffer)))
+      (if-let ((comp-buf (czm-tex-compile--compilation-buffer)))
           (with-current-buffer comp-buf
-            (push buf czm-tex-compile--subscribed-buffers)))
-      (unless (start-process-shell-command
-               "czm-tex-compile"
-               (czm-tex-compile--compilation-buffer-name)
-               (czm-tex-compile--compilation-command))
-        (error "Failed to start LaTeX compilation"))
-      (with-current-buffer (czm-tex-compile--compilation-buffer)
-        (special-mode)))
+            (push buf czm-tex-compile--subscribed-buffers))
+        (unless (start-process-shell-command
+                 "czm-tex-compile"
+                 (czm-tex-compile--compilation-buffer-name)
+                 (czm-tex-compile--compilation-command))
+          (error "Failed to start LaTeX compilation"))
+        (with-current-buffer (czm-tex-compile--compilation-buffer)
+          (special-mode)
+          (push buf czm-tex-compile--subscribed-buffers))))
     (add-hook 'kill-buffer-hook 'czm-tex-compile--unsubscribe nil t)
     (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t)
     (when czm-tex-compile--timer
