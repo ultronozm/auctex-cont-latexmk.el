@@ -59,9 +59,6 @@
 (defvar czm-tex-compile--timer nil
   "Timer for reporting changes to the log file.")
 
-;; (defvar-local czm-tex-compile--compilation-buffer-name nil
-;;   "Name of the buffer used for LaTeX compilation.")
-
 (defconst czm-tex-compile--watching-str
   "=== Watching for updated files. Use ctrl/C to stop ..."
   "String indicating that latexmk is watching for updated files.")
@@ -82,7 +79,7 @@
   :group 'czm-tex-compile)
 
 (defun czm-tex-compile--process-multiply-defined-warning (message)
-  "Get position of multiply defined MESSAGE labels in BUF."
+  "Get position of multiply defined MESSAGE labels."
   (let ((label (progn
                  (string-match "`\\(.*\\)'" message)
                  (match-string 1 message))))
@@ -170,8 +167,7 @@ cell (BEG . END) indicating where the error happens."
                  (list error-p
                        (replace-regexp-in-string "\n" "" message)
                        region))))
-           error-list
-           )))
+           error-list)))
     (delq nil processed-list)))
 
 (defun czm-tex-compile--compilation-command ()
@@ -199,7 +195,7 @@ latexmk compilation is in a \"Watching\" state."
     (and
      (when-let ((buf (czm-tex-compile--compilation-buffer)))
        (with-current-buffer buf
-         (goto-char (point-max))         
+         (goto-char (point-max))
          (forward-line -1)
          (equal (buffer-substring (point) (line-end-position))
                 czm-tex-compile--watching-str)))
