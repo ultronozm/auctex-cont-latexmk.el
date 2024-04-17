@@ -51,30 +51,16 @@
   :type 'string
   :group 'czm-tex-compile)
 
-(defvar-local czm-tex-compile--process nil
-  "Process running the LaTeX compilation.")
-
 (defvar-local czm-tex-compile--report-fn nil
   "Function provided by Flymake for reporting diagnostics.")
 
-(defvar-local czm-tex-compile--timer nil
+(defvar-local czm-tex-compile--timer-enabled nil)
+
+(defvar czm-tex-compile--timer nil
   "Timer for reporting changes to the log file.")
 
-(defvar-local czm-tex-compile--compilation-buffer-name nil
-  "Name of the buffer used for LaTeX compilation.")
-
-(defun czm-tex-compile--kill-process ()
-  "Kill the LaTeX compilation process associated with the buffer.
-Also kill the timer for watching the log file."
-  (when (process-live-p czm-tex-compile--process)
-    (interrupt-process czm-tex-compile--process)
-    (sit-for 0.1)
-    (delete-process czm-tex-compile--process))
-  (when (get-buffer czm-tex-compile--compilation-buffer-name)
-    (kill-buffer czm-tex-compile--compilation-buffer-name))
-  (when czm-tex-compile--timer
-    (cancel-timer czm-tex-compile--timer)
-    (setq czm-tex-compile--timer nil)))
+;; (defvar-local czm-tex-compile--compilation-buffer-name nil
+;;   "Name of the buffer used for LaTeX compilation.")
 
 (defconst czm-tex-compile--watching-str
   "=== Watching for updated files. Use ctrl/C to stop ..."
@@ -150,39 +136,57 @@ Returns a list of triples (ERROR-P DESCRIPTION REGION), where
 ERROR-P is non-nil if the error is an error rather than a
 warning, DESCRIPTION is what you'd expect, and REGION is a cons
 cell (BEG . END) indicating where the error happens."
-  (mapcar
-   (lambda (item)
-     (let ((error-p (eq (nth 0 item) 'error))
-           (file (nth 1 item))
-           (line (nth 2 item))
-           (message (nth 3 item))
-           (context (nth 5 item))
-           (_search-string (nth 6 item))
-           (is-bad-box (nth 8 item)))
-       (when-let
-           ((region
-             (cond
-              ((file-equal-p file (buffer-file-name))
-               (and
-                line
-                (not (cl-some (lambda (ignored)
-                                (string-match-p ignored message))
-                              czm-tex-compile-ignored-warnings))
-                (stringp file)
-                (or (not is-bad-box)
-                    czm-tex-compile-report-hbox-errors)
-                (if error-p
-                    (czm-tex-compile--process-regular-error context line)
-                  (flymake-diag-region (current-buffer) line))))
-              ((file-equal-p file (TeX-master-file "aux"))
-               (and czm-tex-compile-report-multiple-labels
-                    (string-match-p "multiply defined" message)
-                    (not error-p)
-                    (czm-tex-compile--process-multiply-defined-warning message))))))
-         (list error-p
-               (replace-regexp-in-string "\n" "" message)
-               region))))
-   (czm-tex-compile--error-list (TeX-master-file "log"))))
+  (let* ((error-list (czm-tex-compile--error-list (TeX-master-file "log")))
+         (processed-list
+          (mapcar
+           (lambda (item)
+             (let ((error-p (eq (nth 0 item) 'error))
+                   (file (nth 1 item))
+                   (line (nth 2 item))
+                   (message (nth 3 item))
+                   (context (nth 5 item))
+                   (_search-string (nth 6 item))
+                   (is-bad-box (nth 8 item)))
+               (when-let
+                   ((region
+                     (cond
+                      ((file-equal-p file (buffer-file-name))
+                       (and
+                        line
+                        (not (cl-some (lambda (ignored)
+                                        (string-match-p ignored message))
+                                      czm-tex-compile-ignored-warnings))
+                        (stringp file)
+                        (or (not is-bad-box)
+                            czm-tex-compile-report-hbox-errors)
+                        (if error-p
+                            (czm-tex-compile--process-regular-error context line)
+                          (flymake-diag-region (current-buffer) line))))
+                      ((file-equal-p file (TeX-master-file "aux"))
+                       (and czm-tex-compile-report-multiple-labels
+                            (string-match-p "multiply defined" message)
+                            (not error-p)
+                            (czm-tex-compile--process-multiply-defined-warning message))))))
+                 (list error-p
+                       (replace-regexp-in-string "\n" "" message)
+                       region))))
+           error-list
+           )))
+    (delq nil processed-list)))
+
+(defun czm-tex-compile--compilation-command ()
+  "Return the command used to compile the current LaTeX document."
+  (format "%s %s" czm-tex-compile-command (TeX-master-file "tex")))
+
+
+(defun czm-tex-compile--compilation-buffer-name ()
+  "Return the name of the buffer used for LaTeX compilation."
+  (let ((master (abbreviate-file-name (expand-file-name (TeX-master-file)))))
+    (format "*tex-pvc-%s*" master)))
+
+(defun czm-tex-compile--compilation-buffer ()
+  "Return the buffer used for LaTeX compilation."
+  (get-buffer (czm-tex-compile--compilation-buffer-name)))
 
 (defun czm-tex-compile--fresh-p ()
   "Return non-nil if logged errors should apply to current buffer.
@@ -193,9 +197,9 @@ latexmk compilation is in a \"Watching\" state."
   (when-let* ((file (buffer-file-name))
               (log-file (TeX-master-file "log")))
     (and
-     (when-let ((buf (get-buffer czm-tex-compile--compilation-buffer-name)))
+     (when-let ((buf (czm-tex-compile--compilation-buffer)))
        (with-current-buffer buf
-         (goto-char (point-max))
+         (goto-char (point-max))         
          (forward-line -1)
          (equal (buffer-substring (point) (line-end-position))
                 czm-tex-compile--watching-str)))
@@ -207,20 +211,21 @@ latexmk compilation is in a \"Watching\" state."
 
 (defun czm-tex-compile--timer-function ()
   "Report to the flymake backend if the current buffer is fresh."
-  (dolist (datum (czm-tex-compile-process-log))
-    (cl-assert (not (null (nth 2 datum))) nil
-               "Region is nil in datum: %S" datum))
-  (when (and czm-tex-compile--report-fn (czm-tex-compile--fresh-p))
-    (funcall
-     czm-tex-compile--report-fn
-     (mapcar
-      (lambda (datum)
-        (cl-destructuring-bind (error-p description region) datum
-          (flymake-make-diagnostic
-           (current-buffer) (car region) (cdr region)
-           (if error-p :error :warning)
-           description)))
-      (czm-tex-compile-process-log)))))
+  (when czm-tex-compile--timer-enabled
+    (dolist (datum (czm-tex-compile-process-log))
+      (cl-assert (not (null (nth 2 datum))) nil
+                 "Region is nil in datum: %S" datum))
+    (when (and czm-tex-compile--report-fn (czm-tex-compile--fresh-p))
+      (funcall
+       czm-tex-compile--report-fn
+       (mapcar
+        (lambda (datum)
+          (cl-destructuring-bind (error-p description region) datum
+            (flymake-make-diagnostic
+             (current-buffer) (car region) (cdr region)
+             (if error-p :error :warning)
+             description)))
+        (czm-tex-compile-process-log))))))
 
 (defvar czm-tex-compile-mode)
 
@@ -228,8 +233,11 @@ latexmk compilation is in a \"Watching\" state."
   "Flymake backend for LaTeX based on latexmk.
 Save REPORT-FN in a local variable, called by
 e`czm-tex-compile--timer' to report diagnostics."
-  (when (czm-tex-compile-mode)
+  (when czm-tex-compile-mode
     (setq czm-tex-compile--report-fn report-fn)))
+
+(defvar-local czm-tex-compile--subscribed-buffers nil
+  "List of buffers subscribed to the current LaTeX compilation.")
 
 ;;;###autoload
 (define-minor-mode czm-tex-compile-mode
@@ -237,38 +245,42 @@ e`czm-tex-compile--timer' to report diagnostics."
   :lighter nil
   (cond
    (czm-tex-compile-mode
-    (let ((name (and (string-match "\\([^\.]+\\)\.tex" (buffer-name))
-                     (match-string 1 (buffer-name)))))
-      (unless name
-        (user-error "Buffer name does not match expected pattern"))
-      (when (process-live-p czm-tex-compile--process)
-        (interrupt-process czm-tex-compile--process)
-        (sit-for 0.1)
-        (delete-process czm-tex-compile--process))
-      (setq czm-tex-compile--compilation-buffer-name
-            (concat "*czm-tex-compile-" (expand-file-name name) "*"))
-      (let ((command (concat czm-tex-compile-command " " name ".tex")))
-        (setq czm-tex-compile--process
-              (start-process-shell-command
-               "czm-tex-compile" czm-tex-compile--compilation-buffer-name
-               command)))
-      (let ((current-buf (current-buffer)))
-        (with-current-buffer (get-buffer czm-tex-compile--compilation-buffer-name)
-          (special-mode)
-          (setq-local czm-tex-compile--parent-buffer current-buf)
-          (local-set-key (kbd "TAB")
-                         (lambda ()
-                           (interactive)
-                           (set-window-buffer (selected-window) czm-tex-compile--parent-buffer)))))
-      (add-hook 'kill-buffer-hook 'czm-tex-compile--kill-process nil t)
-      (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t)
-      (when czm-tex-compile--timer
-        (cancel-timer czm-tex-compile--timer)
-        (setq czm-tex-compile--timer nil))
-      (setq czm-tex-compile--timer
-            (run-with-timer 2 1 #'czm-tex-compile--timer-function))))
+    (if-let ((comp-buf (czm-tex-compile--compilation-buffer)))
+        (let ((buf (current-buffer)))
+          (with-current-buffer comp-buf
+            (push buf czm-tex-compile--subscribed-buffers)))
+      (unless (start-process-shell-command
+               "czm-tex-compile"
+               (czm-tex-compile--compilation-buffer-name)
+               (czm-tex-compile--compilation-command))
+        (error "Failed to start LaTeX compilation"))
+      (with-current-buffer (czm-tex-compile--compilation-buffer)
+        (special-mode)))
+    (add-hook 'kill-buffer-hook 'czm-tex-compile--unsubscribe nil t)
+    (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t)
+    (when czm-tex-compile--timer
+      (cancel-timer czm-tex-compile--timer)
+      (setq czm-tex-compile--timer nil))
+    (setq czm-tex-compile--timer
+          (run-with-timer 2 1 #'czm-tex-compile--timer-function))
+    (setq czm-tex-compile--timer-enabled t))
    (t
-    (czm-tex-compile--kill-process)
+    (let ((buf (current-buffer))
+          (comp-buf (czm-tex-compile--compilation-buffer))
+          done)
+      (with-current-buffer comp-buf
+        (setq czm-tex-compile--subscribed-buffers
+              (cl-remove buf czm-tex-compile--subscribed-buffers))
+        (when (null czm-tex-compile--subscribed-buffers)
+          (setq done t)))
+      (when done
+        (let ((process (get-buffer-process comp-buf)))
+          (when (process-live-p process)
+            (interrupt-process process)
+            (sit-for 0.1)
+            (delete-process process))
+          (kill-buffer comp-buf)))
+      (setq czm-tex-compile--timer-enabled nil))
     (when czm-tex-compile--report-fn
       (setq czm-tex-compile--report-fn nil)))))
 
