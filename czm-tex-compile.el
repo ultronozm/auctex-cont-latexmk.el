@@ -174,7 +174,6 @@ cell (BEG . END) indicating where the error happens."
   "Return the command used to compile the current LaTeX document."
   (format "%s %s" czm-tex-compile-command (TeX-master-file "tex")))
 
-
 (defun czm-tex-compile--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
   (let ((master (abbreviate-file-name (expand-file-name (TeX-master-file)))))
@@ -208,9 +207,6 @@ latexmk compilation is in a \"Watching\" state."
 (defun czm-tex-compile--timer-function ()
   "Report to the flymake backend if the current buffer is fresh."
   (when czm-tex-compile--timer-enabled
-    (dolist (datum (czm-tex-compile-process-log))
-      (cl-assert (not (null (nth 2 datum))) nil
-                 "Region is nil in datum: %S" datum))
     (when (and czm-tex-compile--report-fn (czm-tex-compile--fresh-p))
       (funcall
        czm-tex-compile--report-fn
@@ -234,6 +230,25 @@ e`czm-tex-compile--timer' to report diagnostics."
 
 (defvar-local czm-tex-compile--subscribed-buffers nil
   "List of buffers subscribed to the current LaTeX compilation.")
+
+(defun czm-tex-compile--unsubscribe ()
+  "Unsubscribe from LaTeX compilation if the current buffer is in the list."
+  (let ((buf (current-buffer))
+        (comp-buf (czm-tex-compile--compilation-buffer))
+        done)
+    (with-current-buffer comp-buf
+      (setq czm-tex-compile--subscribed-buffers
+            (cl-remove buf czm-tex-compile--subscribed-buffers))
+      (when (null czm-tex-compile--subscribed-buffers)
+        (setq done t)))
+    (when done
+      (let ((process (get-buffer-process comp-buf)))
+        (when (process-live-p process)
+          (interrupt-process process)
+          (sit-for 0.1)
+          (delete-process process))
+        (kill-buffer comp-buf)))
+    (setq czm-tex-compile--timer-enabled nil)))
 
 ;;;###autoload
 (define-minor-mode czm-tex-compile-mode
@@ -262,22 +277,7 @@ e`czm-tex-compile--timer' to report diagnostics."
           (run-with-timer 2 1 #'czm-tex-compile--timer-function))
     (setq czm-tex-compile--timer-enabled t))
    (t
-    (let ((buf (current-buffer))
-          (comp-buf (czm-tex-compile--compilation-buffer))
-          done)
-      (with-current-buffer comp-buf
-        (setq czm-tex-compile--subscribed-buffers
-              (cl-remove buf czm-tex-compile--subscribed-buffers))
-        (when (null czm-tex-compile--subscribed-buffers)
-          (setq done t)))
-      (when done
-        (let ((process (get-buffer-process comp-buf)))
-          (when (process-live-p process)
-            (interrupt-process process)
-            (sit-for 0.1)
-            (delete-process process))
-          (kill-buffer comp-buf)))
-      (setq czm-tex-compile--timer-enabled nil))
+    (czm-tex-compile--unsubscribe)
     (when czm-tex-compile--report-fn
       (setq czm-tex-compile--report-fn nil)))))
 
