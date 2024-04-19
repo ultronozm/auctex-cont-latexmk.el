@@ -42,7 +42,7 @@
 (require 'flymake)
 
 (defgroup czm-tex-compile nil
-  "Convenience functions for compiling LaTeX documents."
+  "Run latexmk continuously, report errors via flymake."
   :group 'tex)
 
 (defcustom czm-tex-compile-command
@@ -50,14 +50,6 @@
   "Command to compile LaTeX documents."
   :type 'string
   :group 'czm-tex-compile)
-
-(defvar-local czm-tex-compile--report-fn nil
-  "Function provided by Flymake for reporting diagnostics.")
-
-(defvar-local czm-tex-compile--timer-enabled nil)
-
-(defvar czm-tex-compile--timer nil
-  "Timer for reporting changes to the log file.")
 
 (defcustom czm-tex-compile-report-multiple-labels t
   "Non-nil means report multiple label errors via flymake."
@@ -167,6 +159,11 @@ latexmk compilation is in a \"Watching\" state."
      (time-less-p (nth 5 (file-attributes file))
                   (nth 5 (file-attributes log-file))))))
 
+(defvar-local czm-tex-compile--report-fn nil
+  "Function provided by Flymake for reporting diagnostics.")
+
+(defvar-local czm-tex-compile--timer-enabled nil)
+
 (defun czm-tex-compile--timer-function ()
   "Report to the flymake backend if the current buffer is fresh."
   (when czm-tex-compile--timer-enabled
@@ -216,6 +213,9 @@ e`czm-tex-compile--timer' to report diagnostics."
 (defun czm-tex-compile--compilation-command ()
   "Return the command used to compile the current LaTeX document."
   (format "%s %s" czm-tex-compile-command (TeX-master-file "tex")))
+
+(defvar czm-tex-compile--timer nil
+  "Timer for reporting changes to the log file.")
 
 ;;;###autoload
 (define-minor-mode czm-tex-compile-mode
