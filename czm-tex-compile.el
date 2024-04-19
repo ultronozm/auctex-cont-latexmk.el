@@ -59,62 +59,58 @@
 (defvar czm-tex-compile--timer nil
   "Timer for reporting changes to the log file.")
 
-(defconst czm-tex-compile--watching-str
-  "=== Watching for updated files. Use ctrl/C to stop ..."
-  "String indicating that latexmk is watching for updated files.")
-
-(defcustom czm-tex-compile-ignored-warnings
-  '("Package hyperref Warning: Token not allowed in a PDF string")
-  "List of warnings to ignore when parsing LaTeX log files."
-  :type '(repeat string))
-
-(defcustom czm-tex-compile-report-hbox-errors nil
-  "Non-nil means report hbox errors via flymake."
-  :type 'boolean
-  :group 'czm-tex-compile)
-
 (defcustom czm-tex-compile-report-multiple-labels t
   "Non-nil means report multiple label errors via flymake."
   :type 'boolean
   :group 'czm-tex-compile)
 
-(defun czm-tex-compile--process-multiply-defined-warning (message)
-  "Get position of multiply defined MESSAGE labels."
-  (let ((label (progn
-                 (string-match "`\\(.*\\)'" message)
-                 (match-string 1 message))))
-    (save-excursion
-      (save-restriction
-        (widen)
-        (goto-char (point-min))
-        (when (re-search-forward (concat "\\\\label{" label "}")
-                                 nil t)
-          (cons (line-beginning-position)
-                (line-end-position)))))))
-
-(defun czm-tex-compile--process-regular-error (context line)
-  "Get position of error and handle CONTEXT and LINE.
-Return a cons cell (BEG . END) indicating where the error happens, or
-nil if the error is not found."
-  (when-let* ((prefix (with-temp-buffer
-                        (insert context)
-                        (goto-char (point-min))
-                        (when (re-search-forward "\nl\\.\\([0-9]+\\) " nil t)
-                          (buffer-substring-no-properties
-                           (point) (line-end-position)))))
-              (pos
-               (save-excursion
-                 (save-restriction
-                   (widen)
-                   (goto-char (point-min))
-                   (forward-line (1- line))
-                   (let ((truncated-prefix
-                          (substring prefix (max 0 (- (length prefix) 3))))
-                         (line-end (line-end-position))
-                         (bol (point)))
-                     (or (search-forward truncated-prefix line-end t)
-                         bol))))))
-    (cons pos (1+ pos))))
+(defun czm-tex-compile-process-item (type file line message offset context search-string
+                                          _line-end bad-box _error-point ignore)
+  "Process an error or warning for the current TeX document.
+The arguments are as in in `TeX-error-list'.  Return either nil or a
+triple (ERROR-P DESCRIPTION (BEG . END)), where ERROR-P is non-nil if
+the error is an error rather than a warning, and the other elements of
+the triple describe the error or warning."
+  (and
+   (not ignore)
+   (stringp file)
+   (or (not bad-box) TeX-debug-bad-boxes)
+   (when-let
+       ((region
+         (save-restriction
+           (widen)
+           (cond
+            ((file-equal-p file (buffer-file-name))
+             (when line
+               (if (eq type 'error)
+                   (save-excursion
+                     (goto-char (point-min))
+                     (forward-line (+ line offset -1))
+                     (unless (string= search-string " ")
+                       (search-forward search-string nil t)
+                       (cons (point) (1+ (point)))))
+                 (flymake-diag-region (current-buffer) (+ line offset)))))
+            ((file-equal-p file (TeX-master-file "aux"))
+             (and czm-tex-compile-report-multiple-labels
+                  (string-match-p "multiply defined" message)
+                  (not (eq type 'error))
+                  (let* ((label (progn
+                                  (string-match "`\\(.*\\)'" message)
+                                  (match-string 1 message)))
+                         (label-re
+                          (concat "\\\\label\\(?:\\[[^]]+\\]\\)?{"
+                                  (regexp-quote label) "}")))
+                    (save-excursion
+                      (goto-char (point-min))
+                      (when (re-search-forward label-re nil t)
+                        ;; Return the full line so the diagnostic is
+                        ;; not covered by preview overlays when
+                        ;; \\label appears after \\begin{equation}.
+                        (cons (line-beginning-position)
+                              (line-end-position)))))))))))
+     (list (eq type 'error)
+           (replace-regexp-in-string "\n" "" message)
+           region))))
 
 (defun czm-tex-compile--error-list (log-file)
   "Retrieve parsed TeX error list from LOG-FILE."
@@ -133,46 +129,9 @@ Returns a list of triples (ERROR-P DESCRIPTION REGION), where
 ERROR-P is non-nil if the error is an error rather than a
 warning, DESCRIPTION is what you'd expect, and REGION is a cons
 cell (BEG . END) indicating where the error happens."
-  (let* ((error-list (czm-tex-compile--error-list (TeX-master-file "log")))
-         (processed-list
-          (mapcar
-           (lambda (item)
-             (let ((error-p (eq (nth 0 item) 'error))
-                   (file (nth 1 item))
-                   (line (nth 2 item))
-                   (message (nth 3 item))
-                   (context (nth 5 item))
-                   (_search-string (nth 6 item))
-                   (is-bad-box (nth 8 item)))
-               (when-let
-                   ((region
-                     (cond
-                      ((file-equal-p file (buffer-file-name))
-                       (and
-                        line
-                        (not (cl-some (lambda (ignored)
-                                        (string-match-p ignored message))
-                                      czm-tex-compile-ignored-warnings))
-                        (stringp file)
-                        (or (not is-bad-box)
-                            czm-tex-compile-report-hbox-errors)
-                        (if error-p
-                            (czm-tex-compile--process-regular-error context line)
-                          (flymake-diag-region (current-buffer) line))))
-                      ((file-equal-p file (TeX-master-file "aux"))
-                       (and czm-tex-compile-report-multiple-labels
-                            (string-match-p "multiply defined" message)
-                            (not error-p)
-                            (czm-tex-compile--process-multiply-defined-warning message))))))
-                 (list error-p
-                       (replace-regexp-in-string "\n" "" message)
-                       region))))
-           error-list)))
-    (delq nil processed-list)))
-
-(defun czm-tex-compile--compilation-command ()
-  "Return the command used to compile the current LaTeX document."
-  (format "%s %s" czm-tex-compile-command (TeX-master-file "tex")))
+  (delq nil (mapcar (lambda (item)
+                      (apply #'czm-tex-compile-process-item item))
+                    (czm-tex-compile--error-list (TeX-master-file "log")))))
 
 (defun czm-tex-compile--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
@@ -182,6 +141,10 @@ cell (BEG . END) indicating where the error happens."
 (defun czm-tex-compile--compilation-buffer ()
   "Return the buffer used for LaTeX compilation."
   (get-buffer (czm-tex-compile--compilation-buffer-name)))
+
+(defconst czm-tex-compile--watching-str
+  "=== Watching for updated files. Use ctrl/C to stop ..."
+  "String indicating that latexmk is watching for updated files.")
 
 (defun czm-tex-compile--fresh-p ()
   "Return non-nil if logged errors should apply to current buffer.
@@ -236,19 +199,23 @@ e`czm-tex-compile--timer' to report diagnostics."
   (let ((buf (current-buffer))
         (comp-buf (czm-tex-compile--compilation-buffer))
         done)
-    (with-current-buffer comp-buf
-      (setq czm-tex-compile--subscribed-buffers
-            (cl-remove buf czm-tex-compile--subscribed-buffers))
-      (when (null czm-tex-compile--subscribed-buffers)
-        (setq done t)))
-    (when done
-      (let ((process (get-buffer-process comp-buf)))
-        (when (process-live-p process)
-          (interrupt-process process)
-          (sit-for 0.1)
-          (delete-process process))
-        (kill-buffer comp-buf)))
-    (setq czm-tex-compile--timer-enabled nil)))
+    (when comp-buf
+      (with-current-buffer comp-buf
+        (setq czm-tex-compile--subscribed-buffers
+              (cl-remove buf czm-tex-compile--subscribed-buffers))
+        (when (null czm-tex-compile--subscribed-buffers)
+          (setq done t)))
+      (when done
+        (let ((process (get-buffer-process comp-buf)))
+          (when (process-live-p process)
+            (interrupt-process process)
+            (sit-for 0.1)
+            (delete-process process))
+          (kill-buffer comp-buf))))))
+
+(defun czm-tex-compile--compilation-command ()
+  "Return the command used to compile the current LaTeX document."
+  (format "%s %s" czm-tex-compile-command (TeX-master-file "tex")))
 
 ;;;###autoload
 (define-minor-mode czm-tex-compile-mode
@@ -278,6 +245,9 @@ e`czm-tex-compile--timer' to report diagnostics."
     (setq czm-tex-compile--timer-enabled t))
    (t
     (czm-tex-compile--unsubscribe)
+    (remove-hook 'kill-buffer-hook 'czm-tex-compile--unsubscribe t)
+    (remove-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake t)
+    (setq czm-tex-compile--timer-enabled nil)
     (when czm-tex-compile--report-fn
       (setq czm-tex-compile--report-fn nil)))))
 
