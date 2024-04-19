@@ -45,18 +45,12 @@
   "Run latexmk continuously, report errors via flymake."
   :group 'tex)
 
-(defcustom czm-tex-compile-command
-  "latexmk -pvc -shell-escape -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
-  "Command to compile LaTeX documents."
-  :type 'string
-  :group 'czm-tex-compile)
-
 (defcustom czm-tex-compile-report-multiple-labels t
   "Non-nil means report multiple label errors via flymake."
   :type 'boolean
   :group 'czm-tex-compile)
 
-(defun czm-tex-compile-process-item (type file line message offset context search-string
+(defun czm-tex-compile-process-item (type file line message offset _context search-string
                                           _line-end bad-box _error-point ignore)
   "Process an error or warning for the current TeX document.
 The arguments are as in in `TeX-error-list'.  Return either nil or a
@@ -117,10 +111,8 @@ the triple describe the error or warning."
 
 (defun czm-tex-compile-process-log ()
   "Process log file for current LaTeX document.
-Returns a list of triples (ERROR-P DESCRIPTION REGION), where
-ERROR-P is non-nil if the error is an error rather than a
-warning, DESCRIPTION is what you'd expect, and REGION is a cons
-cell (BEG . END) indicating where the error happens."
+Return a list of triples as in the docstring of
+`czm-tex-compile-process-item'."
   (delq nil (mapcar (lambda (item)
                       (apply #'czm-tex-compile-process-item item))
                     (czm-tex-compile--error-list (TeX-master-file "log")))))
@@ -159,14 +151,24 @@ latexmk compilation is in a \"Watching\" state."
      (time-less-p (nth 5 (file-attributes file))
                   (nth 5 (file-attributes log-file))))))
 
+(defvar czm-tex-compile-mode)
+
 (defvar-local czm-tex-compile--report-fn nil
   "Function provided by Flymake for reporting diagnostics.")
 
-(defvar-local czm-tex-compile--timer-enabled nil)
+(defun czm-tex-compile-flymake (report-fn &rest _args)
+  "Flymake backend for LaTeX based on latexmk.
+Save REPORT-FN in a local variable, called by
+e`czm-tex-compile--timer' to report diagnostics."
+  (when czm-tex-compile-mode
+    (setq czm-tex-compile--report-fn report-fn)))
+
+(defvar czm-tex-compile--timer nil
+  "Timer for reporting changes to the log file.")
 
 (defun czm-tex-compile--timer-function ()
   "Report to the flymake backend if the current buffer is fresh."
-  (when czm-tex-compile--timer-enabled
+  (when czm-tex-compile-mode
     (when (and czm-tex-compile--report-fn (czm-tex-compile--fresh-p))
       (funcall
        czm-tex-compile--report-fn
@@ -178,15 +180,6 @@ latexmk compilation is in a \"Watching\" state."
              (if error-p :error :warning)
              description)))
         (czm-tex-compile-process-log))))))
-
-(defvar czm-tex-compile-mode)
-
-(defun czm-tex-compile-flymake (report-fn &rest _args)
-  "Flymake backend for LaTeX based on latexmk.
-Save REPORT-FN in a local variable, called by
-e`czm-tex-compile--timer' to report diagnostics."
-  (when czm-tex-compile-mode
-    (setq czm-tex-compile--report-fn report-fn)))
 
 (defvar-local czm-tex-compile--subscribed-buffers nil
   "List of buffers subscribed to the current LaTeX compilation.")
@@ -210,12 +203,15 @@ e`czm-tex-compile--timer' to report diagnostics."
             (delete-process process))
           (kill-buffer comp-buf))))))
 
+(defcustom czm-tex-compile-command
+  "latexmk -pvc -shell-escape -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
+  "Command to compile LaTeX documents."
+  :type 'string
+  :group 'czm-tex-compile)
+
 (defun czm-tex-compile--compilation-command ()
   "Return the command used to compile the current LaTeX document."
   (format "%s %s" czm-tex-compile-command (TeX-master-file "tex")))
-
-(defvar czm-tex-compile--timer nil
-  "Timer for reporting changes to the log file.")
 
 ;;;###autoload
 (define-minor-mode czm-tex-compile-mode
@@ -241,13 +237,11 @@ e`czm-tex-compile--timer' to report diagnostics."
       (cancel-timer czm-tex-compile--timer)
       (setq czm-tex-compile--timer nil))
     (setq czm-tex-compile--timer
-          (run-with-timer 2 1 #'czm-tex-compile--timer-function))
-    (setq czm-tex-compile--timer-enabled t))
+          (run-with-timer 2 1 #'czm-tex-compile--timer-function)))
    (t
     (czm-tex-compile--unsubscribe)
     (remove-hook 'kill-buffer-hook 'czm-tex-compile--unsubscribe t)
     (remove-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake t)
-    (setq czm-tex-compile--timer-enabled nil)
     (when czm-tex-compile--report-fn
       (setq czm-tex-compile--report-fn nil)))))
 
