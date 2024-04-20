@@ -51,8 +51,20 @@
 
 (defcustom tex-continuous-command
   "latexmk -pvc -shell-escape -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
-  "Command to compile LaTeX documents."
+  "Command to compile LaTeX documents.
+This is combined with an additional option to output build files to a
+directory, if `TeX-output-dir' is set, and the name of the master file."
   :type 'string)
+
+(defun tex-continuous--build-file (ext)
+  "Return the build file with extension EXT.
+Takes into account `TeX-output-dir'."
+  (if TeX-output-dir
+      (let ((master-dir (TeX-master-directory)))
+        (concat (or (TeX--master-output-dir master-dir t)
+                    master-dir)
+                (file-name-nondirectory (TeX-master-file ext))))
+    (TeX-master-file ext)))
 
 (defun tex-continuous-process-item (type file line message offset _context search-string
                                          _line-end bad-box _error-point ignore)
@@ -79,7 +91,7 @@ is an error rather than a warning."
                        (search-forward search-string nil t)
                        (cons (point) (1+ (point)))))
                  (flymake-diag-region (current-buffer) (+ line offset)))))
-            ((file-equal-p file (TeX-master-file "aux"))
+            ((file-equal-p file (tex-continuous--build-file "aux"))
              (and tex-continuous-report-multiple-labels
                   (string-match-p "multiply defined" message)
                   (not (eq type 'error))
@@ -118,7 +130,7 @@ Return a list of triples as in the docstring of
 `tex-continuous-process-item'."
   (delq nil (mapcar (lambda (item)
                       (apply #'tex-continuous-process-item item))
-                    (tex-continuous--error-list (TeX-master-file "log")))))
+                    (tex-continuous--error-list (tex-continuous--build-file "log")))))
 
 (defun tex-continuous--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
@@ -140,7 +152,7 @@ current buffer is a file, the current buffer has a log file, the
 log file is newer than the current buffer, and the current
 latexmk compilation is in a \"Watching\" state."
   (when-let* ((file (buffer-file-name))
-              (log-file (TeX-master-file "log")))
+              (log-file (tex-continuous--build-file "log")))
     (and
      (when-let ((buf (tex-continuous--compilation-buffer)))
        (with-current-buffer buf
@@ -209,7 +221,12 @@ report diagnostics."
 
 (defun tex-continuous--compilation-command ()
   "Return the command used to compile the current LaTeX document."
-  (format "%s %s" tex-continuous-command (TeX-master-file "tex")))
+  (concat
+   tex-continuous-command
+   (when TeX-output-dir
+     (format " -outdir='%s'" TeX-output-dir))
+   " "
+   (TeX-master-file "tex")))
 
 ;;;###autoload
 (define-minor-mode tex-continuous-mode
