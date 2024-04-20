@@ -24,17 +24,14 @@
 ;;; Commentary:
 
 ;; This package provides a minor mode that compiles a LaTeX document
-;; via latexmk, reporting errors via `flymake'.  Customize the
-;; variable `tex-continuous-command' to change the command used to
-;; compile the document.
+;; via latexmk, reporting errors via `flymake'.
 ;;
-;; My use-package declaration:
+;; Use M-x tex-continuous-toggle to toggle the minor mode and set up
+;; flymake.  If you use flymake in tex documents for other reasons,
+;; then you should instead use M-x tex-continuous-mode.
 ;;
-;; (use-package tex-continuous
-;;   :elpaca (:host github :repo "ultronozm/tex-continuous.el"
-;;                  :depth nil)
-;;   :bind
-;;   ("C-c k" . tex-continuous-toggle))
+;; Customize the variable `tex-continuous-command' to change the
+;; compilation command.
 
 ;;; Code:
 
@@ -57,7 +54,7 @@
   :group 'tex-continuous)
 
 (defun tex-continuous-process-item (type file line message offset _context search-string
-                                          _line-end bad-box _error-point ignore)
+                                         _line-end bad-box _error-point ignore)
   "Process an error or warning for the current TeX document.
 The arguments are as in in `TeX-error-list'.  Return either nil or a
 triple (ERROR-P DESCRIPTION (BEG . END)), where ERROR-P is non-nil if it
