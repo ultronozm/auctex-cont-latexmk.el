@@ -32,6 +32,9 @@
 ;;
 ;; Customize the variable `tex-continuous-command' to change the
 ;; compilation command.
+;;
+;; The compilation takes place in a buffer *pvc-filename*, so look
+;; there if you need to see the output.
 
 ;;; Code:
 
@@ -44,19 +47,17 @@
 
 (defcustom tex-continuous-report-multiple-labels t
   "Non-nil means report multiple label errors via flymake."
-  :type 'boolean
-  :group 'tex-continuous)
+  :type 'boolean)
 
 (defcustom tex-continuous-command
   "latexmk -pvc -shell-escape -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
   "Command to compile LaTeX documents."
-  :type 'string
-  :group 'tex-continuous)
+  :type 'string)
 
 (defun tex-continuous-process-item (type file line message offset _context search-string
                                          _line-end bad-box _error-point ignore)
   "Process an error or warning for the current TeX document.
-The arguments are as in in `TeX-error-list'.  Return either nil or a
+The arguments are as in `TeX-error-list'.  Return either nil or a
 triple (ERROR-P DESCRIPTION (BEG . END)), where ERROR-P is non-nil if it
 is an error rather than a warning."
   (and
@@ -160,8 +161,8 @@ latexmk compilation is in a \"Watching\" state."
 
 (defun tex-continuous-flymake (report-fn &rest _args)
   "Flymake backend for LaTeX based on latexmk.
-Save REPORT-FN in a local variable, called by
-e`tex-continuous--timer' to report diagnostics."
+Save REPORT-FN in a local variable, called by `tex-continuous--timer' to
+report diagnostics."
   (when tex-continuous-mode
     (setq tex-continuous--report-fn report-fn)))
 

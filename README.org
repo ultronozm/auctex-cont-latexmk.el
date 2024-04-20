@@ -13,8 +13,6 @@ Download this repository, install using =M-x package-install-file= (or package-v
 #+end_src
 Replace the keybinding with whatever you prefer (or delete it and just run the command via =M-x=).
 
-You can tweak the underlying =latexmk= command via =M-x customize-variable tex-continuous-command=.
-
 The command =tex-continuous-toggle= behaves the way that I prefer -- it enables both =tex-continuous-mode= and =flymake-mode=, restricting the backends for the latter to those coming from the former.  Depending upon your preferences, you may wish to write your own "wrapper" for =tex-continuous-mode= akin to =tex-continuous-toggle=.
 
 The way the Flymake backend works, it will update only when the latexmk process reaches a "watching for changes" state and the buffer is unmodified.  The workflow is thus to save the file, wait a few seconds for the compilation to complete, and then to use Flymake to navigate the errors.  I configure Flymake to use =M-n= and =M-p= for navigation, and also use =(setq flymake-show-diagnostics-at-end-of-line t)=, which displays the error/warning messages in the buffer itself rather than just in the minibuffer:
@@ -30,3 +28,9 @@ The way the Flymake backend works, it will update only when the latexmk process 
 #+end_src
 
 That's all.  I prefer this workflow to the alternative in which one compiles the document manually via =TeX-command-master= (=C-c C-c=) and navigates the warning/error messages using =next-error= (=M-n=) and =previous-error= (=M-p=).  It also gives a handy way to keep the .aux files up-to-date; I take advantage of this feature in the packages [[https://github.com/ultronozm/czm-preview.el][czm-preview.el]] and [[https://github.com/ultronozm/czm-tex-fold.el][czm-tex-fold.el]] to annotate the TeX buffer with label numbers.
+
+* Customization
+- You can tweak the underlying =latexmk= command via =M-x customize-variable tex-continuous-command=.
+
+* Troubleshooting
+- The compilation takes place in a buffer *pvc-filename*, so look there if you need to see the output.
