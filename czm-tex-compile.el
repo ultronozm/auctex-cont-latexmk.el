@@ -1,11 +1,11 @@
-;;; czm-tex-compile.el --- run latexmk continuously, report errors via flymake  -*- lexical-binding: t; -*-
+;;; tex-continuous.el --- run latexmk continuously, report errors via flymake  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Paul D. Nelson
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
 ;; Version: 0.1
-;; URL: https://github.com/ultronozm/czm-tex-compile.el
-;; Package-Requires: ((emacs "29.1") (auctex))
+;; URL: https://github.com/ultronozm/tex-continuous.el
+;; Package-Requires: ((emacs "27.1") (auctex "11.92"))
 ;; Keywords: tex
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -25,38 +25,43 @@
 
 ;; This package provides a minor mode that compiles a LaTeX document
 ;; via latexmk, reporting errors via `flymake'.  Customize the
-;; variable `czm-tex-compile-command' to change the command used to
+;; variable `tex-continuous-command' to change the command used to
 ;; compile the document.
 ;;
 ;; My use-package declaration:
 ;;
-;; (use-package czm-tex-compile
-;;   :elpaca (:host github :repo "ultronozm/czm-tex-compile.el"
+;; (use-package tex-continuous
+;;   :elpaca (:host github :repo "ultronozm/tex-continuous.el"
 ;;                  :depth nil)
 ;;   :bind
-;;   ("C-c k" . czm-tex-compile-toggle))
+;;   ("C-c k" . tex-continuous-toggle))
 
 ;;; Code:
 
 (require 'tex)
 (require 'flymake)
 
-(defgroup czm-tex-compile nil
+(defgroup tex-continuous nil
   "Run latexmk continuously, report errors via flymake."
   :group 'tex)
 
-(defcustom czm-tex-compile-report-multiple-labels t
+(defcustom tex-continuous-report-multiple-labels t
   "Non-nil means report multiple label errors via flymake."
   :type 'boolean
-  :group 'czm-tex-compile)
+  :group 'tex-continuous)
 
-(defun czm-tex-compile-process-item (type file line message offset _context search-string
+(defcustom tex-continuous-command
+  "latexmk -pvc -shell-escape -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
+  "Command to compile LaTeX documents."
+  :type 'string
+  :group 'tex-continuous)
+
+(defun tex-continuous-process-item (type file line message offset _context search-string
                                           _line-end bad-box _error-point ignore)
   "Process an error or warning for the current TeX document.
 The arguments are as in in `TeX-error-list'.  Return either nil or a
-triple (ERROR-P DESCRIPTION (BEG . END)), where ERROR-P is non-nil if
-the error is an error rather than a warning, and the other elements of
-the triple describe the error or warning."
+triple (ERROR-P DESCRIPTION (BEG . END)), where ERROR-P is non-nil if it
+is an error rather than a warning."
   (and
    (not ignore)
    (stringp file)
@@ -77,7 +82,7 @@ the triple describe the error or warning."
                        (cons (point) (1+ (point)))))
                  (flymake-diag-region (current-buffer) (+ line offset)))))
             ((file-equal-p file (TeX-master-file "aux"))
-             (and czm-tex-compile-report-multiple-labels
+             (and tex-continuous-report-multiple-labels
                   (string-match-p "multiply defined" message)
                   (not (eq type 'error))
                   (let* ((label (progn
@@ -98,7 +103,7 @@ the triple describe the error or warning."
            (replace-regexp-in-string "\n" "" message)
            region))))
 
-(defun czm-tex-compile--error-list (log-file)
+(defun tex-continuous--error-list (log-file)
   "Retrieve parsed TeX error list from LOG-FILE."
   (with-temp-buffer
     (insert-file-contents log-file)
@@ -109,28 +114,28 @@ the triple describe the error or warning."
     (TeX-parse-all-errors)
     TeX-error-list))
 
-(defun czm-tex-compile-process-log ()
+(defun tex-continuous-process-log ()
   "Process log file for current LaTeX document.
 Return a list of triples as in the docstring of
-`czm-tex-compile-process-item'."
+`tex-continuous-process-item'."
   (delq nil (mapcar (lambda (item)
-                      (apply #'czm-tex-compile-process-item item))
-                    (czm-tex-compile--error-list (TeX-master-file "log")))))
+                      (apply #'tex-continuous-process-item item))
+                    (tex-continuous--error-list (TeX-master-file "log")))))
 
-(defun czm-tex-compile--compilation-buffer-name ()
+(defun tex-continuous--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
   (let ((master (abbreviate-file-name (expand-file-name (TeX-master-file)))))
     (format "*pvc-%s*" master)))
 
-(defun czm-tex-compile--compilation-buffer ()
+(defun tex-continuous--compilation-buffer ()
   "Return the buffer used for LaTeX compilation."
-  (get-buffer (czm-tex-compile--compilation-buffer-name)))
+  (get-buffer (tex-continuous--compilation-buffer-name)))
 
-(defconst czm-tex-compile--watching-str
+(defconst tex-continuous--watching-str
   "=== Watching for updated files. Use ctrl/C to stop ..."
   "String indicating that latexmk is watching for updated files.")
 
-(defun czm-tex-compile--fresh-p ()
+(defun tex-continuous--fresh-p ()
   "Return non-nil if logged errors should apply to current buffer.
 This is the case if the current buffer is not modified, the
 current buffer is a file, the current buffer has a log file, the
@@ -139,61 +144,62 @@ latexmk compilation is in a \"Watching\" state."
   (when-let* ((file (buffer-file-name))
               (log-file (TeX-master-file "log")))
     (and
-     (when-let ((buf (czm-tex-compile--compilation-buffer)))
+     (when-let ((buf (tex-continuous--compilation-buffer)))
        (with-current-buffer buf
          (goto-char (point-max))
          (forward-line -1)
          (equal (buffer-substring (point) (line-end-position))
-                czm-tex-compile--watching-str)))
+                tex-continuous--watching-str)))
      (not (buffer-modified-p))
      (file-exists-p file)
      (file-exists-p log-file)
      (time-less-p (nth 5 (file-attributes file))
                   (nth 5 (file-attributes log-file))))))
 
-(defvar czm-tex-compile-mode)
+(defvar tex-continuous-mode)
 
-(defvar-local czm-tex-compile--report-fn nil
+(defvar-local tex-continuous--report-fn nil
   "Function provided by Flymake for reporting diagnostics.")
 
-(defun czm-tex-compile-flymake (report-fn &rest _args)
+(defun tex-continuous-flymake (report-fn &rest _args)
   "Flymake backend for LaTeX based on latexmk.
 Save REPORT-FN in a local variable, called by
-e`czm-tex-compile--timer' to report diagnostics."
-  (when czm-tex-compile-mode
-    (setq czm-tex-compile--report-fn report-fn)))
+e`tex-continuous--timer' to report diagnostics."
+  (when tex-continuous-mode
+    (setq tex-continuous--report-fn report-fn)))
 
-(defvar czm-tex-compile--timer nil
+(defvar tex-continuous--timer nil
   "Timer for reporting changes to the log file.")
 
-(defun czm-tex-compile--timer-function ()
+(defun tex-continuous--timer-function ()
   "Report to the flymake backend if the current buffer is fresh."
-  (when czm-tex-compile-mode
-    (when (and czm-tex-compile--report-fn (czm-tex-compile--fresh-p))
-      (funcall
-       czm-tex-compile--report-fn
-       (mapcar
-        (lambda (datum)
-          (cl-destructuring-bind (error-p description region) datum
-            (flymake-make-diagnostic
-             (current-buffer) (car region) (cdr region)
-             (if error-p :error :warning)
-             description)))
-        (czm-tex-compile-process-log))))))
+  (and tex-continuous-mode
+       tex-continuous--report-fn
+       (tex-continuous--fresh-p)
+       (funcall
+        tex-continuous--report-fn
+        (mapcar
+         (lambda (datum)
+           (cl-destructuring-bind (error-p description region) datum
+             (flymake-make-diagnostic
+              (current-buffer) (car region) (cdr region)
+              (if error-p :error :warning)
+              description)))
+         (tex-continuous-process-log)))))
 
-(defvar-local czm-tex-compile--subscribed-buffers nil
+(defvar-local tex-continuous--subscribed-buffers nil
   "List of buffers subscribed to the current LaTeX compilation.")
 
-(defun czm-tex-compile--unsubscribe ()
+(defun tex-continuous--unsubscribe ()
   "Unsubscribe from LaTeX compilation if the current buffer is in the list."
   (let ((buf (current-buffer))
-        (comp-buf (czm-tex-compile--compilation-buffer))
+        (comp-buf (tex-continuous--compilation-buffer))
         done)
     (when comp-buf
       (with-current-buffer comp-buf
-        (setq czm-tex-compile--subscribed-buffers
-              (cl-remove buf czm-tex-compile--subscribed-buffers))
-        (when (null czm-tex-compile--subscribed-buffers)
+        (setq tex-continuous--subscribed-buffers
+              (cl-remove buf tex-continuous--subscribed-buffers))
+        (when (null tex-continuous--subscribed-buffers)
           (setq done t)))
       (when done
         (let ((process (get-buffer-process comp-buf)))
@@ -203,68 +209,62 @@ e`czm-tex-compile--timer' to report diagnostics."
             (delete-process process))
           (kill-buffer comp-buf))))))
 
-(defcustom czm-tex-compile-command
-  "latexmk -pvc -shell-escape -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
-  "Command to compile LaTeX documents."
-  :type 'string
-  :group 'czm-tex-compile)
-
-(defun czm-tex-compile--compilation-command ()
+(defun tex-continuous--compilation-command ()
   "Return the command used to compile the current LaTeX document."
-  (format "%s %s" czm-tex-compile-command (TeX-master-file "tex")))
+  (format "%s %s" tex-continuous-command (TeX-master-file "tex")))
 
 ;;;###autoload
-(define-minor-mode czm-tex-compile-mode
+(define-minor-mode tex-continuous-mode
   "If enabled, run LaTeX compilation on the current buffer."
   :lighter nil
   (cond
-   (czm-tex-compile-mode
+   (tex-continuous-mode
     (let ((buf (current-buffer)))
-      (if-let ((comp-buf (czm-tex-compile--compilation-buffer)))
+      (if-let ((comp-buf (tex-continuous--compilation-buffer)))
           (with-current-buffer comp-buf
-            (push buf czm-tex-compile--subscribed-buffers))
+            (push buf tex-continuous--subscribed-buffers))
         (unless (start-process-shell-command
-                 "czm-tex-compile"
-                 (czm-tex-compile--compilation-buffer-name)
-                 (czm-tex-compile--compilation-command))
+                 "tex-continuous"
+                 (tex-continuous--compilation-buffer-name)
+                 (tex-continuous--compilation-command))
           (error "Failed to start LaTeX compilation"))
-        (with-current-buffer (czm-tex-compile--compilation-buffer)
+        (with-current-buffer (tex-continuous--compilation-buffer)
           (special-mode)
-          (push buf czm-tex-compile--subscribed-buffers))))
-    (add-hook 'kill-buffer-hook 'czm-tex-compile--unsubscribe nil t)
-    (add-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake nil t)
-    (when czm-tex-compile--timer
-      (cancel-timer czm-tex-compile--timer)
-      (setq czm-tex-compile--timer nil))
-    (setq czm-tex-compile--timer
-          (run-with-timer 2 1 #'czm-tex-compile--timer-function)))
+          (push buf tex-continuous--subscribed-buffers))))
+    (add-hook 'kill-buffer-hook 'tex-continuous--unsubscribe nil t)
+    (add-hook 'flymake-diagnostic-functions #'tex-continuous-flymake nil t)
+    (when tex-continuous--timer
+      (cancel-timer tex-continuous--timer)
+      (setq tex-continuous--timer nil))
+    (setq tex-continuous--timer
+          (run-with-timer 2 1 #'tex-continuous--timer-function)))
    (t
-    (czm-tex-compile--unsubscribe)
-    (remove-hook 'kill-buffer-hook 'czm-tex-compile--unsubscribe t)
-    (remove-hook 'flymake-diagnostic-functions #'czm-tex-compile-flymake t)
-    (when czm-tex-compile--report-fn
-      (setq czm-tex-compile--report-fn nil)))))
+    (tex-continuous--unsubscribe)
+    (remove-hook 'kill-buffer-hook 'tex-continuous--unsubscribe t)
+    (remove-hook 'flymake-diagnostic-functions #'tex-continuous-flymake t)
+    (when tex-continuous--report-fn
+      (setq tex-continuous--report-fn nil)))))
 
-(defvar-local czm-tex-compile--saved-flymake-diagnostic-functions nil
-  "Value of `flymake-diagnostic-functions' before calling `czm-tex-compile-toggle'.")
+(defvar-local tex-continuous--saved-flymake-diagnostic-functions nil
+  "Value of `flymake-diagnostic-functions' before calling `tex-continuous-toggle'.")
 
 ;;;###autoload
-(defun czm-tex-compile-toggle ()
-  "Toggle `czm-tex-compile-mode', and also `flymake-mode'."
+(defun tex-continuous-toggle ()
+  "Toggle `tex-continuous-mode', and also `flymake-mode'."
   (interactive)
   (cond
-   (czm-tex-compile-mode
-    (czm-tex-compile-mode 0)
+   (tex-continuous-mode
+    (tex-continuous-mode 0)
     (flymake-mode 0)
     (setq-local flymake-diagnostic-functions
-                czm-tex-compile--saved-flymake-diagnostic-functions)
-    (message "czm-tex-compile-mode and flymake-mode disabled"))
+                tex-continuous--saved-flymake-diagnostic-functions)
+    (message "tex-continuous-mode and flymake-mode disabled"))
    (t
-    (czm-tex-compile-mode 1)
-    (setq czm-tex-compile--saved-flymake-diagnostic-functions flymake-diagnostic-functions)
-    (setq-local flymake-diagnostic-functions '(czm-tex-compile-flymake t))
+    (tex-continuous-mode 1)
+    (setq tex-continuous--saved-flymake-diagnostic-functions flymake-diagnostic-functions)
+    (setq-local flymake-diagnostic-functions '(tex-continuous-flymake t))
     (flymake-mode 1)
-    (message "czm-tex-compile-mode and flymake-mode enabled"))))
+    (message "tex-continuous-mode and flymake-mode enabled"))))
 
-(provide 'czm-tex-compile)
-;;; czm-tex-compile.el ends here
+(provide 'tex-continuous)
+;;; tex-continuous.el ends here
