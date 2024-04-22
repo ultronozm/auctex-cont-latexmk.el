@@ -113,14 +113,24 @@ is an error rather than a warning."
            (replace-regexp-in-string "\n" "" message)
            region))))
 
+(defun tex-continuous--format-log-buffer ()
+  "Format the current log buffer by joining lines suitably.
+Adapted from `TeX-format-filter'"
+  (goto-char (point-max))
+  (while (> (point) (point-min))
+    (end-of-line 0)
+    (when (and (memq (- (point) (line-beginning-position)) '(79 80))
+               (not (memq (char-after (1+ (point))) '(?\n ?\()))
+               (not (and (eq (char-before) ?.)
+                         (char-after (1+ (point)))
+                         (not (eq ?w (char-syntax (char-after (1+ (point)))))))))
+      (delete-char 1))))
+
 (defun tex-continuous--error-list (log-file)
   "Retrieve parsed TeX error list from LOG-FILE."
   (with-temp-buffer
     (insert-file-contents log-file)
-    (goto-char (point-min))
-    (while (re-search-forward "Warning:" nil t)
-      (let ((fill-column most-positive-fixnum))
-        (call-interactively 'fill-paragraph)))
+    (tex-continuous--format-log-buffer)
     (TeX-parse-all-errors)
     TeX-error-list))
 
