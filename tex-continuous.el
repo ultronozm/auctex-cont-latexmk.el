@@ -50,24 +50,37 @@
   :type 'boolean)
 
 (defcustom tex-continuous-command
-  "latexmk -pvc -shell-escape -pdf -view=none -e '$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/'"
+  '("latexmk -pvc -shell-escape -pdf -view=none -e "
+    ("$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/"))
   "Command to compile LaTeX documents.
-This is combined with an additional option to output build files to a
-directory, if `TeX-output-dir' is set, and the name of the master file."
-  :type 'string)
+This is a list consisting of strings or lists of strings.  It is
+compiled to a single string by concatenating the strings and quoting the
+lists, using system-specific quotes.  To produce the compilation
+command, it is combined with an additional option to output build files
+to a directory (if `TeX-output-dir' is set) and the name of the master
+file."
+  :type '(repeat (choice string (repeat string))))
 
-(defun tex-continuous--build-file (ext)
-  "Return the build file with extension EXT.
-Takes into account `TeX-output-dir'."
-  (if TeX-output-dir
-      (let ((master-dir (TeX-master-directory)))
-        (concat (or (TeX--master-output-dir master-dir t)
-                    master-dir)
-                (file-name-nondirectory (TeX-master-file ext))))
-    (TeX-master-file ext)))
+(defun tex-continuous--compilation-command ()
+  "Return the command used to compile the current LaTeX document."
+  (let ((quote
+         (if (memq system-type '(ms-dos windows-nt))
+             "\""
+           "'")))
+    (concat
+     (mapconcat (lambda (item)
+                  (if (listp item)
+                      (concat quote (mapconcat #'identity item) quote)
+                    item))
+                tex-continuous-command)
+     (when TeX-output-dir
+       (concat " -outdir=" (shell-quote-argument TeX-output-dir)))
+     " "
+     (shell-quote-argument (TeX-master-file "tex")))))
 
-(defun tex-continuous-process-item (type file line message offset _context search-string
-                                         _line-end bad-box _error-point ignore)
+(defun tex-continuous-process-item (type file line message offset _context
+                                         search-string _line-end bad-box
+                                         _error-point ignore)
   "Process an error or warning for the current TeX document.
 The arguments are as in `TeX-error-list'.  Return either nil or a
 triple (ERROR-P DESCRIPTION (BEG . END)), where ERROR-P is non-nil if it
@@ -228,15 +241,6 @@ report diagnostics."
             (sit-for 0.1)
             (delete-process process))
           (kill-buffer comp-buf))))))
-
-(defun tex-continuous--compilation-command ()
-  "Return the command used to compile the current LaTeX document."
-  (concat
-   tex-continuous-command
-   (when TeX-output-dir
-     (format " -outdir='%s'" TeX-output-dir))
-   " "
-   (TeX-master-file "tex")))
 
 ;;;###autoload
 (define-minor-mode tex-continuous-mode
