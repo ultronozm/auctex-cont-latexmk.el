@@ -9,7 +9,8 @@ Download this repository, install using =M-x package-install-file= (or package-v
 #+begin_src elisp
 (use-package tex-continuous
   :bind
-  ("C-c k" . tex-continuous-toggle))
+  (:map LaTeX-mode-map
+        ("C-c k" . tex-continuous-toggle)))
 #+end_src
 Replace the keybinding with whatever you prefer (or delete it and just run the command via =M-x=).
 
