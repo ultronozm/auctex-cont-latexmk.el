@@ -83,6 +83,16 @@ file."
      " "
      (shell-quote-argument (TeX-master-file "tex")))))
 
+(defun tex-continuous--build-file (ext)
+  "Return the build file with extension EXT.
+Takes into account `TeX-output-dir'."
+  (if TeX-output-dir
+      (let ((master-dir (TeX-master-directory)))
+        (concat (or (TeX--master-output-dir master-dir t)
+                    master-dir)
+                (file-name-nondirectory (TeX-master-file ext))))
+    (TeX-master-file ext)))
+
 (defun tex-continuous-process-item (type file line message offset _context
                                          search-string _line-end bad-box
                                          _error-point ignore)
