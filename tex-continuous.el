@@ -280,7 +280,8 @@ report diagnostics."
       (setq tex-continuous--report-fn nil)))))
 
 (defvar-local tex-continuous--saved-flymake-diagnostic-functions nil
-  "Value of `flymake-diagnostic-functions' before calling `tex-continuous-toggle'.")
+  "Saved value of `flymake-diagnostic-functions'.
+Saved and restored by `tex-continuous-toggle'.")
 
 ;;;###autoload
 (defun tex-continuous-toggle ()
