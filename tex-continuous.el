@@ -295,7 +295,8 @@ report diagnostics."
     (message "tex-continuous-mode and flymake-mode disabled"))
    (t
     (tex-continuous-mode 1)
-    (setq tex-continuous--saved-flymake-diagnostic-functions flymake-diagnostic-functions)
+    (setq tex-continuous--saved-flymake-diagnostic-functions
+          flymake-diagnostic-functions)
     (setq-local flymake-diagnostic-functions '(tex-continuous-flymake t))
     (flymake-mode 1)
     (message "tex-continuous-mode and flymake-mode enabled"))))
