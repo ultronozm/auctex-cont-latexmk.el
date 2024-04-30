@@ -294,7 +294,6 @@ report diagnostics."
           (add-hook 'after-change-functions #'tex-continuous--update-time nil t)
           (push buf tex-continuous--subscribed-buffers))))
     (add-hook 'kill-buffer-hook 'tex-continuous--unsubscribe nil t)
-    (add-hook 'flymake-diagnostic-functions #'tex-continuous-flymake nil t)
     (when tex-continuous--timer
       (cancel-timer tex-continuous--timer)
       (setq tex-continuous--timer nil))
@@ -303,7 +302,6 @@ report diagnostics."
    (t
     (tex-continuous--unsubscribe)
     (remove-hook 'kill-buffer-hook 'tex-continuous--unsubscribe t)
-    (remove-hook 'flymake-diagnostic-functions #'tex-continuous-flymake t)
     (when tex-continuous--report-fn
       (setq tex-continuous--report-fn nil)))))
 
