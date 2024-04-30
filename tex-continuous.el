@@ -276,7 +276,7 @@ report diagnostics."
 
 ;;;###autoload
 (define-minor-mode tex-continuous-mode
-  "If enabled, run LaTeX compilation on the current buffer."
+  "If enabled, run latexmk on the current tex file."
   :lighter nil
   (cond
    (tex-continuous-mode
