@@ -183,21 +183,37 @@ Return a list of triples as in the docstring of
   "=== Watching for updated files. Use ctrl/C to stop ..."
   "String indicating that latexmk is watching for updated files.")
 
+(defvar-local tex-continuous--last-update-time nil
+  "Time of the last update in the compilation buffer.")
+
+(defun tex-continuous--update-time (_beg _end _len)
+  "Update the time of the last update in the compilation buffer."
+  (setq tex-continuous--last-update-time (current-time)))
+
+(defconst tex-continuous--wait-time 1
+  "Time to wait before checking for changes in the log file.")
+
 (defun tex-continuous--fresh-p ()
   "Return non-nil if logged errors should apply to current buffer.
-This is the case if the current buffer is not modified, the
-current buffer is a file, the current buffer has a log file, the
-log file is newer than the current buffer, and the current
-latexmk compilation is in a \"Watching\" state."
+This is the case if the current buffer is not modified, the current
+buffer is a file, the current buffer has a log file, the log file is
+newer than the current buffer, and the current latexmk compilation is
+either in a watching state or has not updated recently."
   (when-let* ((file (buffer-file-name))
               (log-file (tex-continuous--build-file "log")))
     (and
      (when-let ((buf (tex-continuous--compilation-buffer)))
        (with-current-buffer buf
-         (goto-char (point-max))
-         (forward-line -1)
-         (equal (buffer-substring (point) (line-end-position))
-                tex-continuous--watching-str)))
+         (or
+          (progn
+            (goto-char (point-max))
+            (forward-line -1)
+            (equal (buffer-substring (point) (line-end-position))
+                   tex-continuous--watching-str))
+          (and tex-continuous--last-update-time
+               (time-less-p (time-subtract (current-time)
+                                           tex-continuous--last-update-time)
+                            (seconds-to-time tex-continuous--wait-time))))))
      (not (buffer-modified-p))
      (file-exists-p file)
      (file-exists-p log-file)
@@ -274,6 +290,7 @@ report diagnostics."
           (error "Failed to start LaTeX compilation"))
         (with-current-buffer (tex-continuous--compilation-buffer)
           (special-mode)
+          (add-hook 'after-change-functions #'tex-continuous--update-time nil t)
           (push buf tex-continuous--subscribed-buffers))))
     (add-hook 'kill-buffer-hook 'tex-continuous--unsubscribe nil t)
     (add-hook 'flymake-diagnostic-functions #'tex-continuous-flymake nil t)
