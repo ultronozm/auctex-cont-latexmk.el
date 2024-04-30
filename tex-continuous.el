@@ -210,10 +210,11 @@ either in a watching state or has not updated recently."
             (forward-line -1)
             (equal (buffer-substring (point) (line-end-position))
                    tex-continuous--watching-str))
-          (and tex-continuous--last-update-time
-               (time-less-p (time-subtract (current-time)
-                                           tex-continuous--last-update-time)
-                            (seconds-to-time tex-continuous--wait-time))))))
+          (and (or
+                tex-continuous--last-update-time
+                (time-less-p (time-subtract (current-time)
+                                            tex-continuous--last-update-time)
+                             (seconds-to-time tex-continuous--wait-time)))))))
      (not (buffer-modified-p))
      (file-exists-p file)
      (file-exists-p log-file)
