@@ -324,7 +324,7 @@ Saved and restored by `tex-continuous-toggle'.")
     (tex-continuous-mode 1)
     (setq tex-continuous--saved-flymake-diagnostic-functions
           flymake-diagnostic-functions)
-    (setq-local flymake-diagnostic-functions '(tex-continuous-flymake t))
+    (setq-local flymake-diagnostic-functions '(tex-continuous-flymake))
     (flymake-mode 1)
     (message "tex-continuous-mode and flymake-mode enabled"))))
 
