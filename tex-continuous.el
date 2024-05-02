@@ -175,9 +175,8 @@ Return a list of triples as in the docstring of
   (let ((master (abbreviate-file-name (expand-file-name (TeX-master-file)))))
     (format "*pvc-%s*" master)))
 
-(defun tex-continuous--compilation-buffer ()
-  "Return the buffer used for LaTeX compilation."
-  (get-buffer (tex-continuous--compilation-buffer-name)))
+(defvar-local tex-continuous--compilation-buffer nil
+  "The buffer used for LaTeX compilation.")
 
 (defconst tex-continuous--watching-str
   "=== Watching for updated files. Use ctrl/C to stop ..."
@@ -202,7 +201,7 @@ either in a watching state or has not updated recently."
   (when-let* ((file (buffer-file-name))
               (log-file (tex-continuous--build-file "log")))
     (and
-     (when-let ((buf (tex-continuous--compilation-buffer)))
+     (when-let ((buf tex-continuous--compilation-buffer))
        (with-current-buffer buf
          (or
           (progn
@@ -258,7 +257,7 @@ report diagnostics."
 (defun tex-continuous--unsubscribe ()
   "Unsubscribe from LaTeX compilation if the current buffer is in the list."
   (let ((buf (current-buffer))
-        (comp-buf (tex-continuous--compilation-buffer))
+        (comp-buf tex-continuous--compilation-buffer)
         done)
     (when comp-buf
       (with-current-buffer comp-buf
@@ -274,26 +273,34 @@ report diagnostics."
             (delete-process process))
           (kill-buffer comp-buf))))))
 
+(defun tex-continuous-mode-disable ()
+  "Disable `tex-continuous-mode' in all buffers."
+  (tex-continuous-mode 0))
+
 ;;;###autoload
 (define-minor-mode tex-continuous-mode
   "If enabled, run latexmk on the current tex file."
   :lighter nil
   (cond
    (tex-continuous-mode
-    (let ((buf (current-buffer)))
-      (if-let ((comp-buf (tex-continuous--compilation-buffer)))
+    (let ((buf (current-buffer))
+          (comp-buf-name (tex-continuous--compilation-buffer-name)))
+      (if-let ((comp-buf (setq tex-continuous--compilation-buffer
+                               (get-buffer comp-buf-name))))
           (with-current-buffer comp-buf
             (push buf tex-continuous--subscribed-buffers))
         (unless (start-process-shell-command
                  "tex-continuous"
-                 (tex-continuous--compilation-buffer-name)
+                 comp-buf-name
                  (tex-continuous--compilation-command))
           (error "Failed to start LaTeX compilation"))
-        (with-current-buffer (tex-continuous--compilation-buffer)
+        (with-current-buffer (setq tex-continuous--compilation-buffer
+                                   (get-buffer comp-buf-name))
           (special-mode)
           (add-hook 'after-change-functions #'tex-continuous--update-time nil t)
           (push buf tex-continuous--subscribed-buffers))))
     (add-hook 'kill-buffer-hook 'tex-continuous--unsubscribe nil t)
+    (add-hook 'after-set-visited-file-name-hook 'tex-continuous-mode-disable nil t)
     (when tex-continuous--timer
       (cancel-timer tex-continuous--timer)
       (setq tex-continuous--timer nil))
@@ -302,6 +309,7 @@ report diagnostics."
    (t
     (tex-continuous--unsubscribe)
     (remove-hook 'kill-buffer-hook 'tex-continuous--unsubscribe t)
+    (remove-hook 'after-set-visited-file-name-hook 'tex-continuous-mode-disable t)
     (when tex-continuous--report-fn
       (setq tex-continuous--report-fn nil)))))
 
@@ -309,24 +317,38 @@ report diagnostics."
   "Saved value of `flymake-diagnostic-functions'.
 Saved and restored by `tex-continuous-toggle'.")
 
+(defun tex-continuous-turn-on ()
+  "Enable `tex-continuous-mode' and `flymake-mode'.
+Also set `flymake-diagnostic-functions' to `tex-continuous-flymake'."
+  (interactive)
+  (tex-continuous-mode 1)
+  (setq tex-continuous--saved-flymake-diagnostic-functions
+        flymake-diagnostic-functions)
+  (setq-local flymake-diagnostic-functions '(tex-continuous-flymake))
+  (flymake-mode 1)
+  (remove-hook 'after-set-visited-file-name-hook 'tex-continuous-mode-disable t)
+  (add-hook 'after-set-visited-file-name-hook 'tex-continuous-turn-off nil t)
+  (message "tex-continuous-mode and flymake-mode enabled"))
+
+(defun tex-continuous-turn-off ()
+  "Disable `tex-continuous-mode' and `flymake-mode'.
+Also restore `flymake-diagnostic-functions'."
+  (interactive)
+  (tex-continuous-mode 0)
+  (flymake-mode 0)
+  (setq-local flymake-diagnostic-functions
+              tex-continuous--saved-flymake-diagnostic-functions)
+  (remove-hook 'after-set-visited-file-name-hook 'tex-continuous-turn-off t)
+  (message "tex-continuous-mode and flymake-mode disabled"))
+
 ;;;###autoload
 (defun tex-continuous-toggle ()
   "Toggle `tex-continuous-mode', and also `flymake-mode'."
   (interactive)
-  (cond
-   (tex-continuous-mode
-    (tex-continuous-mode 0)
-    (flymake-mode 0)
-    (setq-local flymake-diagnostic-functions
-                tex-continuous--saved-flymake-diagnostic-functions)
-    (message "tex-continuous-mode and flymake-mode disabled"))
-   (t
-    (tex-continuous-mode 1)
-    (setq tex-continuous--saved-flymake-diagnostic-functions
-          flymake-diagnostic-functions)
-    (setq-local flymake-diagnostic-functions '(tex-continuous-flymake))
-    (flymake-mode 1)
-    (message "tex-continuous-mode and flymake-mode enabled"))))
+  (cond (tex-continuous-mode
+         (tex-continuous-turn-off))
+        (t
+         (tex-continuous-turn-on))))
 
 (provide 'tex-continuous)
 ;;; tex-continuous.el ends here
