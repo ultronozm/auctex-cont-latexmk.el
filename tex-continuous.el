@@ -93,6 +93,21 @@ Takes into account `TeX-output-dir'."
                 (file-name-nondirectory (TeX-master-file ext))))
     (TeX-master-file ext)))
 
+(defun tex-continuous--get-help (message)
+  "Return the AUCTeX help string for MESSAGE."
+  (let ((error-alist
+         (append TeX-error-description-list
+                 TeX-error-description-list-local)))
+    (catch 'found
+      (dolist (error error-alist)
+        (when (string-match (car error) message)
+          (throw 'found (cdr error)))))))
+
+(defun tex-continuous-help-at-point ()
+  "Display the AUCTeX help for the error at point."
+  (interactive)
+  (message "%s" (tex-continuous--get-help (help-at-pt-kbd-string))))
+
 (defun tex-continuous-process-item (type file line message offset _context
                                          search-string _line-end bad-box
                                          _error-point ignore)

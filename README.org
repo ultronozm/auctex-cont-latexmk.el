@@ -35,6 +35,7 @@ That's all.  I prefer this workflow to the alternative in which one compiles the
 
 * Tips
 - TeX compilers are not so good at locating errors involving braces.  For this, the Emacs commands =check-parens=, =tex-validate-buffer= and =tex-validate-region= are indispensable.
+- You can use the command =M-x tex-continuous-help-at-point= (or bind it to a key) if you want to see AUCTeX's help message (if any) for the error at point.
 
 * Customization
 - You can tweak the underlying =latexmk= command via =M-x customize-variable tex-continuous-command=.
