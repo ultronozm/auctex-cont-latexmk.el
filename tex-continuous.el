@@ -254,8 +254,10 @@ report diagnostics."
 (defvar-local tex-continuous--subscribed-buffers nil
   "List of buffers subscribed to the current LaTeX compilation.")
 
-(defun tex-continuous--unsubscribe ()
-  "Unsubscribe from LaTeX compilation if the current buffer is in the list."
+(defun tex-continuous--unsubscribe (&optional nokill)
+  "Unsubscribe from LaTeX compilation if the current buffer is in the list.
+This kills the compilation buffer when its subscriber list becomes
+empty, except when NOKILL is non-nil."
   (let ((buf (current-buffer))
         (comp-buf tex-continuous--compilation-buffer)
         done)
@@ -271,7 +273,25 @@ report diagnostics."
             (interrupt-process process)
             (sit-for 0.1)
             (delete-process process))
-          (kill-buffer comp-buf))))))
+          (unless nokill
+            (kill-buffer comp-buf)))))))
+
+(defvar-local tex-continuous--disable-function nil
+  "Function to disable `tex-continuous' features.
+This will be either `tex-continuous-mode-disable' or
+`tex-continuous-turn-off'.")
+
+(defun tex-continuous--disable ()
+  "Disable `tex-continuous' features."
+  (when tex-continuous--disable-function
+    (funcall tex-continuous--disable-function)))
+
+(defun tex-continuous--cancel-subscriptions ()
+  "Cancel all subscriptions to LaTeX compilation.
+This is called from the compilation buffer when it is killed."
+  (dolist (buf tex-continuous--subscribed-buffers)
+    (with-current-buffer buf
+      (tex-continuous--disable))))
 
 (defun tex-continuous-mode-disable ()
   "Disable `tex-continuous-mode' in all buffers."
@@ -298,9 +318,11 @@ report diagnostics."
                                    (get-buffer comp-buf-name))
           (special-mode)
           (add-hook 'after-change-functions #'tex-continuous--update-time nil t)
+          (add-hook 'kill-buffer-hook #'tex-continuous--cancel-subscriptions nil t)
           (push buf tex-continuous--subscribed-buffers))))
     (add-hook 'kill-buffer-hook 'tex-continuous--unsubscribe nil t)
-    (add-hook 'after-set-visited-file-name-hook 'tex-continuous-mode-disable nil t)
+    (setq tex-continuous--disable-function 'tex-continuous-mode-disable)
+    (add-hook 'after-set-visited-file-name-hook 'tex-continuous--disable nil t)
     (when tex-continuous--timer
       (cancel-timer tex-continuous--timer)
       (setq tex-continuous--timer nil))
@@ -309,7 +331,7 @@ report diagnostics."
    (t
     (tex-continuous--unsubscribe)
     (remove-hook 'kill-buffer-hook 'tex-continuous--unsubscribe t)
-    (remove-hook 'after-set-visited-file-name-hook 'tex-continuous-mode-disable t)
+    (remove-hook 'after-set-visited-file-name-hook 'tex-continuous--disable t)
     (when tex-continuous--report-fn
       (setq tex-continuous--report-fn nil)))))
 
@@ -326,8 +348,7 @@ Also set `flymake-diagnostic-functions' to `tex-continuous-flymake'."
         flymake-diagnostic-functions)
   (setq-local flymake-diagnostic-functions '(tex-continuous-flymake))
   (flymake-mode 1)
-  (remove-hook 'after-set-visited-file-name-hook 'tex-continuous-mode-disable t)
-  (add-hook 'after-set-visited-file-name-hook 'tex-continuous-turn-off nil t)
+  (setq tex-continuous--disable-function 'tex-continuous-turn-off)
   (message "tex-continuous-mode and flymake-mode enabled"))
 
 (defun tex-continuous-turn-off ()
@@ -338,7 +359,6 @@ Also restore `flymake-diagnostic-functions'."
   (flymake-mode 0)
   (setq-local flymake-diagnostic-functions
               tex-continuous--saved-flymake-diagnostic-functions)
-  (remove-hook 'after-set-visited-file-name-hook 'tex-continuous-turn-off t)
   (message "tex-continuous-mode and flymake-mode disabled"))
 
 ;;;###autoload
