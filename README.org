@@ -34,7 +34,7 @@ I also bind =flymake-show-diagnostics-buffer=, which gives an overview of all er
 That's all.  I prefer this workflow to the alternative in which one compiles the document manually via =TeX-command-master= (=C-c C-c=) and navigates the warning/error messages using =next-error= (=M-n=) and =previous-error= (=M-p=).  It also gives a handy way to keep the .aux files up-to-date; I take advantage of this feature in the packages [[https://github.com/ultronozm/czm-preview.el][czm-preview.el]] and [[https://github.com/ultronozm/czm-tex-fold.el][czm-tex-fold.el]] to annotate the TeX buffer with label numbers.
 
 * Tips
-- TeX compilers are not so good at locating errors involving braces.  For this, the Emacs commands =check-parens=, =tex-validate-buffer= and =tex-validate-region= are indispensable.
+- TeX compilers are not so good at locating errors involving braces.  For this, the Emacs commands =check-parens=, =tex-validate-buffer= and =tex-validate-region= are indispensable.  In particular, you should always try these commands when you encounter errors at the bottom of a file concerning an incomplete argument or environment.
 - You can use the command =M-x tex-continuous-help-at-point= (or bind it to a key) if you want to see AUCTeX's help message (if any) for the error at point.
 
 * Customization
