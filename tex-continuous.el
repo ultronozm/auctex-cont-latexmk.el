@@ -108,6 +108,9 @@ Takes into account `TeX-output-dir'."
   (interactive)
   (message "%s" (tex-continuous--get-help (help-at-pt-kbd-string))))
 
+(defun tex-continuous--buffer-file-name ()
+  (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
+
 (defun tex-continuous-process-item (type file line message offset _context
                                          search-string _line-end bad-box
                                          _error-point ignore)
@@ -125,7 +128,7 @@ is an error rather than a warning."
           (save-restriction
             (widen)
             (cond
-             ((file-equal-p file (buffer-file-name))
+             ((file-equal-p file (tex-continuous--buffer-file-name))
               (when line
                 (if (eq type 'error)
                     (save-excursion
@@ -219,7 +222,7 @@ This is the case if the current buffer is not modified, the current
 buffer is a file, the current buffer has a log file, the log file is
 newer than the current buffer, and the current latexmk compilation is
 either in a watching state or has not updated recently."
-  (when-let* ((file (buffer-file-name))
+  (when-let* ((file (tex-continuous--buffer-file-name))
               (log-file (tex-continuous--build-file "log")))
     (and
      (when-let ((buf tex-continuous--compilation-buffer))
