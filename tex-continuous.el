@@ -285,7 +285,7 @@ empty, except when NOKILL is non-nil."
   (let ((buf (current-buffer))
         (comp-buf tex-continuous--compilation-buffer)
         done)
-    (when comp-buf
+    (when (and comp-buf (buffer-live-p comp-buf))
       (with-current-buffer comp-buf
         (setq tex-continuous--subscribed-buffers
               (cl-remove buf tex-continuous--subscribed-buffers))
