@@ -249,6 +249,10 @@ either in a watching state or has not updated recently."
 (defvar-local tex-continuous--report-fn nil
   "Function provided by Flymake for reporting diagnostics.")
 
+(defun tex-continuous--clone-indirect-buffer-hook ()
+  "Set `tex-continuous--report-fn' to nil after cloning an indirect buffer."
+  (setq tex-continuous--report-fn nil))
+
 (defun tex-continuous-flymake (report-fn &rest _args)
   "Flymake backend for LaTeX based on latexmk.
 Save REPORT-FN in a local variable, called by `tex-continuous--timer' to
@@ -373,6 +377,7 @@ Also set `flymake-diagnostic-functions' to `tex-continuous-flymake'."
   (setq-local flymake-diagnostic-functions '(tex-continuous-flymake))
   (flymake-mode 1)
   (setq tex-continuous--disable-function 'tex-continuous-turn-off)
+  (add-hook 'clone-indirect-buffer-hook #'tex-continuous--clone-indirect-buffer-hook nil t)
   (message "tex-continuous-mode and flymake-mode enabled"))
 
 (defun tex-continuous-turn-off ()
@@ -381,6 +386,7 @@ Also restore `flymake-diagnostic-functions'."
   (interactive)
   (tex-continuous-mode 0)
   (flymake-mode 0)
+  (remove-hook 'clone-indirect-buffer-hook #'tex-continuous--clone-indirect-buffer-hook t)
   (setq-local flymake-diagnostic-functions
               tex-continuous--saved-flymake-diagnostic-functions)
   (message "tex-continuous-mode and flymake-mode disabled"))
