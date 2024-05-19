@@ -26,14 +26,14 @@
 ;; This package provides a minor mode that compiles a LaTeX document
 ;; via latexmk, reporting errors via `flymake'.
 ;;
-;; Use M-x tex-continuous-toggle to toggle the minor mode and set up
+;; Use `tex-continuous-toggle' to toggle the minor mode and set up
 ;; flymake.
 ;;
 ;; If you want to enable continuous compilation but prefer either not
 ;; to use the flymake backend or to manage it yourself (e.g., in
-;; combination with our flymake backends), then instead use M-x
-;; tex-continuous-mode and add #'tex-continuous-flymake to
-;; flymake-diagnostic-functions when you'd like.
+;; combination with other flymake backends), then instead use
+;; `tex-continuous-mode' and add #'tex-continuous-flymake to
+;; `flymake-diagnostic-functions' when you'd like.
 ;;
 ;; Customize the variable `tex-continuous-command' to change the
 ;; compilation command.
