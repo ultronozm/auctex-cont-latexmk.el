@@ -5,7 +5,7 @@
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
 ;; Version: 0.1
 ;; URL: https://github.com/ultronozm/tex-continuous.el
-;; Package-Requires: ((emacs "27.1") (auctex "11.92"))
+;; Package-Requires: ((emacs "29.3") (auctex "14.0.5"))
 ;; Keywords: tex
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -83,16 +83,6 @@ file."
      " "
      (shell-quote-argument (TeX-master-file "tex")))))
 
-(defun tex-continuous--build-file (ext)
-  "Return the build file with extension EXT.
-Takes into account `TeX-output-dir'."
-  (if TeX-output-dir
-      (let ((master-dir (TeX-master-directory)))
-        (concat (or (TeX--master-output-dir master-dir t)
-                    master-dir)
-                (file-name-nondirectory (TeX-master-file ext))))
-    (TeX-master-file ext)))
-
 (defun tex-continuous--get-help (message)
   "Return the AUCTeX help string for MESSAGE."
   (let ((error-alist
@@ -138,7 +128,7 @@ is an error rather than a warning."
                         (search-forward search-string nil t)
                         (cons (point) (1+ (point)))))
                   (flymake-diag-region (current-buffer) (+ line offset)))))
-             ((file-equal-p file (tex-continuous--build-file "aux"))
+             ((file-equal-p file (TeX-master-output-file "aux"))
               (and tex-continuous-report-multiple-labels
                    (string-match-p "multiply defined" message)
                    (not (eq type 'error))
@@ -190,9 +180,10 @@ Adapted from `TeX-format-filter'"
   "Process log file for current LaTeX document.
 Return a list of triples as in the docstring of
 `tex-continuous-process-item'."
-  (delq nil (mapcar (lambda (item)
-                      (apply #'tex-continuous-process-item item))
-                    (tex-continuous--error-list (tex-continuous--build-file "log")))))
+  (delq nil
+        (mapcar (lambda (item)
+                  (apply #'tex-continuous-process-item item))
+                (tex-continuous--error-list (TeX-master-output-file "log")))))
 
 (defun tex-continuous--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
@@ -223,7 +214,7 @@ buffer is a file, the current buffer has a log file, the log file is
 newer than the current buffer, and the current latexmk compilation is
 either in a watching state or has not updated recently."
   (when-let* ((file (tex-continuous--buffer-file-name))
-              (log-file (tex-continuous--build-file "log")))
+              (log-file (TeX-master-output-file "log")))
     (and
      (when-let ((buf tex-continuous--compilation-buffer))
        (with-current-buffer buf
