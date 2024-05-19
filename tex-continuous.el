@@ -99,6 +99,7 @@ file."
   (message "%s" (tex-continuous--get-help (help-at-pt-kbd-string))))
 
 (defun tex-continuous--buffer-file-name ()
+  "Return the file name of the current buffer, or its base buffer."
   (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
 
 (defun tex-continuous-process-item (type file line message offset _context
