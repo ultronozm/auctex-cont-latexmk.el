@@ -50,38 +50,11 @@
   "Run latexmk continuously, report errors via flymake."
   :group 'tex)
 
+;;; Flymake Backend
+
 (defcustom tex-continuous-report-multiple-labels t
   "Non-nil means report multiple label errors via flymake."
   :type 'boolean)
-
-(defcustom tex-continuous-command
-  '("latexmk -pvc -shell-escape -pdf -view=none -e "
-    ("$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/"))
-  "Command to compile LaTeX documents.
-This is a list consisting of strings or lists of strings.  It is
-compiled to a single string by concatenating the strings and quoting the
-lists, using system-specific quotes.  To produce the compilation
-command, it is combined with an additional option to output build files
-to a directory (if `TeX-output-dir' is set) and the name of the master
-file."
-  :type '(repeat (choice string (repeat string))))
-
-(defun tex-continuous--compilation-command ()
-  "Return the command used to compile the current LaTeX document."
-  (let ((quote
-         (if (memq system-type '(ms-dos windows-nt))
-             "\""
-           "'")))
-    (concat
-     (mapconcat (lambda (item)
-                  (if (listp item)
-                      (concat quote (mapconcat #'identity item) quote)
-                    item))
-                tex-continuous-command)
-     (when TeX-output-dir
-       (concat " -outdir=" (shell-quote-argument TeX-output-dir)))
-     " "
-     (shell-quote-argument (TeX-master-file "tex")))))
 
 (defun tex-continuous--get-help (message)
   "Return the AUCTeX help string for MESSAGE."
@@ -97,10 +70,6 @@ file."
   "Display the AUCTeX help for the error at point."
   (interactive)
   (message "%s" (tex-continuous--get-help (help-at-pt-kbd-string))))
-
-(defun tex-continuous--buffer-file-name ()
-  "Return the file name of the current buffer, or its base buffer."
-  (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
 
 (defun tex-continuous-process-item (type file line message offset _context
                                          search-string _line-end bad-box
@@ -119,7 +88,9 @@ is an error rather than a warning."
           (save-restriction
             (widen)
             (cond
-             ((file-equal-p file (tex-continuous--buffer-file-name))
+             ((file-equal-p
+               file
+               (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
               (when line
                 (if (eq type 'error)
                     (save-excursion
@@ -186,6 +157,63 @@ Return a list of triples as in the docstring of
                   (apply #'tex-continuous-process-item item))
                 (tex-continuous--error-list (TeX-master-output-file "log")))))
 
+(defvar-local tex-continuous--report-fn nil
+  "Function provided by Flymake for reporting diagnostics.")
+
+(defun tex-continuous--clone-indirect-buffer-hook ()
+  "Set `tex-continuous--report-fn' to nil after cloning an indirect buffer."
+  (setq tex-continuous--report-fn nil))
+
+(defun tex-continuous-flymake (report-fn &rest _args)
+  "Flymake backend for LaTeX based on latexmk.
+Save REPORT-FN in a local variable, called by `tex-continuous--timer' to
+report diagnostics."
+  (setq tex-continuous--report-fn report-fn))
+
+(defun tex-continuous-send-report ()
+  "Report to the Flymake backend."
+  (funcall
+   tex-continuous--report-fn
+   (mapcar
+    (lambda (datum)
+      (cl-destructuring-bind (error-p description region) datum
+        (flymake-make-diagnostic
+         (current-buffer) (car region) (cdr region)
+         (if error-p :error :warning)
+         description)))
+    (tex-continuous-process-log))))
+
+;;; Continuous Compilation
+
+(defcustom tex-continuous-command
+  '("latexmk -pvc -shell-escape -pdf -view=none -e "
+    ("$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/"))
+  "Command to compile LaTeX documents.
+This is a list consisting of strings or lists of strings.  It is
+compiled to a single string by concatenating the strings and quoting the
+lists, using system-specific quotes.  To produce the compilation
+command, it is combined with an additional option to output build files
+to a directory (if `TeX-output-dir' is set) and the name of the master
+file."
+  :type '(repeat (choice string (repeat string))))
+
+(defun tex-continuous--compilation-command ()
+  "Return the command used to compile the current LaTeX document."
+  (let ((quote
+         (if (memq system-type '(ms-dos windows-nt))
+             "\""
+           "'")))
+    (concat
+     (mapconcat (lambda (item)
+                  (if (listp item)
+                      (concat quote (mapconcat #'identity item) quote)
+                    item))
+                tex-continuous-command)
+     (when TeX-output-dir
+       (concat " -outdir=" (shell-quote-argument TeX-output-dir)))
+     " "
+     (shell-quote-argument (TeX-master-file "tex")))))
+
 (defun tex-continuous--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
   (let ((master (abbreviate-file-name (expand-file-name (TeX-master-file)))))
@@ -214,7 +242,8 @@ This is the case if the current buffer is not modified, the current
 buffer is a file, the current buffer has a log file, the log file is
 newer than the current buffer, and the current latexmk compilation is
 either in a watching state or has not updated recently."
-  (when-let* ((file (tex-continuous--buffer-file-name))
+  (when-let* ((file
+               (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
               (log-file (TeX-master-output-file "log")))
     (and
      (when-let ((buf tex-continuous--compilation-buffer))
@@ -238,20 +267,6 @@ either in a watching state or has not updated recently."
 
 (defvar tex-continuous-mode)
 
-(defvar-local tex-continuous--report-fn nil
-  "Function provided by Flymake for reporting diagnostics.")
-
-(defun tex-continuous--clone-indirect-buffer-hook ()
-  "Set `tex-continuous--report-fn' to nil after cloning an indirect buffer."
-  (setq tex-continuous--report-fn nil))
-
-(defun tex-continuous-flymake (report-fn &rest _args)
-  "Flymake backend for LaTeX based on latexmk.
-Save REPORT-FN in a local variable, called by `tex-continuous--timer' to
-report diagnostics."
-  (when tex-continuous-mode
-    (setq tex-continuous--report-fn report-fn)))
-
 (defvar tex-continuous--timer nil
   "Timer for reporting changes to the log file.")
 
@@ -260,16 +275,7 @@ report diagnostics."
   (and tex-continuous-mode
        tex-continuous--report-fn
        (tex-continuous--fresh-p)
-       (funcall
-        tex-continuous--report-fn
-        (mapcar
-         (lambda (datum)
-           (cl-destructuring-bind (error-p description region) datum
-             (flymake-make-diagnostic
-              (current-buffer) (car region) (cdr region)
-              (if error-p :error :warning)
-              description)))
-         (tex-continuous-process-log)))))
+       (tex-continuous-send-report)))
 
 (defvar-local tex-continuous--subscribed-buffers nil
   "List of buffers subscribed to the current LaTeX compilation.")
