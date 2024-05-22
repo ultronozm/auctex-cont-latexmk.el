@@ -50,6 +50,8 @@
   "Run latexmk continuously, report errors via flymake."
   :group 'tex)
 
+(defvar tex-continuous-mode)
+
 ;;; Flymake Backend
 
 (defcustom tex-continuous-report-multiple-labels t
@@ -168,7 +170,12 @@ Return a list of triples as in the docstring of
   "Flymake backend for LaTeX based on latexmk.
 Save REPORT-FN in a local variable, called by `tex-continuous--timer' to
 report diagnostics."
-  (setq tex-continuous--report-fn report-fn))
+  ;; At present, we check for `tex-continuous-mode' just to avoid
+  ;; spamming random buffers with report functions.  Could easily
+  ;; replace this with some other check if we wanted to use the
+  ;; Flymake backend provided here in other situations.
+  (when tex-continuous-mode
+    (setq tex-continuous--report-fn report-fn)))
 
 (defun tex-continuous-send-report ()
   "Report to the Flymake backend."
@@ -264,8 +271,6 @@ either in a watching state or has not updated recently."
      (file-exists-p log-file)
      (time-less-p (nth 5 (file-attributes file))
                   (nth 5 (file-attributes log-file))))))
-
-(defvar tex-continuous-mode)
 
 (defvar tex-continuous--timer nil
   "Timer for reporting changes to the log file.")
