@@ -139,7 +139,8 @@ Adapted from `TeX-format-filter'"
                (not (memq (char-after (1+ (point))) '(?\n ?\()))
                (not (and (eq (char-before) ?.)
                          (char-after (1+ (point)))
-                         (not (eq ?w (char-syntax (char-after (1+ (point)))))))))
+                         (not (eq ?w (char-syntax
+                                      (char-after (1+ (point)))))))))
       (delete-char 1))))
 
 (defun tex-continuous--error-list (log-file)
@@ -295,7 +296,8 @@ empty, except when NOKILL is non-nil."
     (when (and comp-buf (buffer-live-p comp-buf))
       (with-current-buffer comp-buf
         (setq tex-continuous--subscribed-buffers
-              (cl-remove buf tex-continuous--subscribed-buffers))
+              (seq-remove (lambda (b) (eq b buf))
+                          tex-continuous--subscribed-buffers))
         (when (null tex-continuous--subscribed-buffers)
           (setq done t)))
       (when done
@@ -349,7 +351,8 @@ This is called from the compilation buffer when it is killed."
                                    (get-buffer comp-buf-name))
           (special-mode)
           (add-hook 'after-change-functions #'tex-continuous--update-time nil t)
-          (add-hook 'kill-buffer-hook #'tex-continuous--cancel-subscriptions nil t)
+          (add-hook 'kill-buffer-hook
+                    #'tex-continuous--cancel-subscriptions nil t)
           (push buf tex-continuous--subscribed-buffers))))
     (add-hook 'kill-buffer-hook 'tex-continuous--unsubscribe nil t)
     (setq tex-continuous--disable-function 'tex-continuous-mode-disable)
