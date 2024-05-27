@@ -163,9 +163,12 @@ Return a list of triples as in the docstring of
 (defvar-local tex-continuous--report-fn nil
   "Function provided by Flymake for reporting diagnostics.")
 
-(defun tex-continuous--clone-indirect-buffer-hook ()
-  "Set `tex-continuous--report-fn' to nil after cloning an indirect buffer."
-  (setq tex-continuous--report-fn nil))
+(defvar-local tex-continuous-force-enable nil
+  "Whether to enable the Flymake backend unconditionally.
+This is non-nil if we should enable the Flymake backend independent of
+whether `tex-continuous-mode' is enabled.  This may be useful for
+testing or applying the backend in other contexts, e.g., in the context
+of AUCTeX's built-in compilation functions.")
 
 (defun tex-continuous-flymake (report-fn &rest _args)
   "Flymake backend for LaTeX based on latexmk.
@@ -175,7 +178,7 @@ report diagnostics."
   ;; spamming random buffers with report functions.  Could easily
   ;; replace this with some other check if we wanted to use the
   ;; Flymake backend provided here in other situations.
-  (when tex-continuous-mode
+  (when (or tex-continuous-mode tex-continuous-force-enable)
     (setq tex-continuous--report-fn report-fn)))
 
 (defun tex-continuous-send-report ()
@@ -190,6 +193,13 @@ report diagnostics."
          (if error-p :error :warning)
          description)))
     (tex-continuous-process-log))))
+
+(defun tex-continuous--clone-indirect-buffer-hook ()
+  "Set `tex-continuous--report-fn' to nil after cloning an indirect buffer.
+This should be added to `clone-indirect-buffer-hook' for any buffer in
+which the Flymake backend is used.  This is because we don't want the
+Flymake report function to propagate to indirect buffers."
+  (setq tex-continuous--report-fn nil))
 
 ;;; Continuous Compilation
 
