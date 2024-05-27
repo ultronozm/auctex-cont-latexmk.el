@@ -383,33 +383,47 @@ This is called from the compilation buffer when it is killed."
   "Saved value of `flymake-diagnostic-functions'.
 Saved and restored by `tex-continuous-toggle'.")
 
+(defvar-local tex-continuous--saved-flymake-mode nil
+  "Saved value of `flymake-mode'.
+Saved and restored by `tex-continuous-toggle'.")
+
+(defcustom tex-continuous-retained-flymake-backends
+  '(eglot-flymake-backend)
+  "Flymake backends to retain when enabling `tex-continuous-mode'."
+  :type 'boolean)
+
 (defun tex-continuous-turn-on ()
-  "Enable `tex-continuous-mode' and `flymake-mode'.
-Also set `flymake-diagnostic-functions' to `tex-continuous-flymake'."
+  "Enable `tex-continuous-mode' and set up Flymake."
   (interactive)
   (tex-continuous-mode 1)
   (setq tex-continuous--saved-flymake-diagnostic-functions
         flymake-diagnostic-functions)
-  (setq-local flymake-diagnostic-functions '(tex-continuous-flymake))
+  (setq tex-continuous--saved-flymake-mode (if flymake-mode 1 0))
+  (setq-local flymake-diagnostic-functions
+              (append
+               '(tex-continuous-flymake)
+               (seq-intersection flymake-diagnostic-functions
+                                 tex-continuous-retained-flymake-backends)))
   (flymake-mode 1)
   (setq tex-continuous--disable-function 'tex-continuous-turn-off)
-  (add-hook 'clone-indirect-buffer-hook #'tex-continuous--clone-indirect-buffer-hook nil t)
-  (message "tex-continuous-mode and flymake-mode enabled"))
+  (add-hook 'clone-indirect-buffer-hook
+            #'tex-continuous--clone-indirect-buffer-hook nil t)
+  (message "tex-continuous-mode enabled"))
 
 (defun tex-continuous-turn-off ()
-  "Disable `tex-continuous-mode' and `flymake-mode'.
-Also restore `flymake-diagnostic-functions'."
+  "Disable `tex-continuous-mode' and restore flymake settings."
   (interactive)
   (tex-continuous-mode 0)
-  (flymake-mode 0)
-  (remove-hook 'clone-indirect-buffer-hook #'tex-continuous--clone-indirect-buffer-hook t)
+  (flymake-mode tex-continuous--saved-flymake-mode)
+  (remove-hook 'clone-indirect-buffer-hook
+               #'tex-continuous--clone-indirect-buffer-hook t)
   (setq-local flymake-diagnostic-functions
               tex-continuous--saved-flymake-diagnostic-functions)
-  (message "tex-continuous-mode and flymake-mode disabled"))
+  (message "tex-continuous-mode disabled"))
 
 ;;;###autoload
 (defun tex-continuous-toggle ()
-  "Toggle `tex-continuous-mode', and also `flymake-mode'."
+  "Toggle `tex-continuous-mode' and its Flymake backend."
   (interactive)
   (cond (tex-continuous-mode
          (tex-continuous-turn-off))
