@@ -1,4 +1,4 @@
-;;; tex-continuous.el --- run latexmk continuously, report errors via flymake  -*- lexical-binding: t; -*-
+;;; tex-continuous.el --- run latexmk continuously, report errors via Flymake  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Paul D. Nelson
 
@@ -27,11 +27,11 @@
 ;; via latexmk, reporting errors via `flymake'.
 ;;
 ;; Use `tex-continuous-toggle' to toggle the minor mode and set up
-;; flymake.
+;; Flymake.
 ;;
 ;; If you want to enable continuous compilation but prefer either not
-;; to use the flymake backend or to manage it yourself (e.g., in
-;; combination with other flymake backends), then instead use
+;; to use the Flymake backend or to manage it yourself (e.g., in
+;; combination with other Flymake backends), then instead use
 ;; `tex-continuous-mode' and add #'tex-continuous-flymake to
 ;; `flymake-diagnostic-functions' when you'd like.
 ;;
@@ -47,7 +47,7 @@
 (require 'flymake)
 
 (defgroup tex-continuous nil
-  "Run latexmk continuously, report errors via flymake."
+  "Run latexmk continuously, report errors via Flymake."
   :group 'tex)
 
 (defvar tex-continuous-mode)
@@ -55,7 +55,7 @@
 ;;; Flymake Backend
 
 (defcustom tex-continuous-report-multiple-labels t
-  "Non-nil means report multiple label errors via flymake."
+  "Non-nil means report multiple label errors via Flymake."
   :type 'boolean)
 
 (defun tex-continuous--get-help (message)
@@ -276,7 +276,7 @@ either in a watching state or has not updated recently."
   "Timer for reporting changes to the log file.")
 
 (defun tex-continuous--timer-function ()
-  "Report to the flymake backend if the current buffer is fresh."
+  "Report to the Flymake backend if the current buffer is fresh."
   (and tex-continuous-mode
        tex-continuous--report-fn
        (tex-continuous--fresh-p)
