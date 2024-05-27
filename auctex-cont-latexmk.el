@@ -1,10 +1,10 @@
-;;; tex-continuous.el --- run latexmk continuously, report errors via Flymake  -*- lexical-binding: t; -*-
+;;; auctex-cont-latexmk.el --- run latexmk continuously, report errors via Flymake  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Paul D. Nelson
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
 ;; Version: 0.1
-;; URL: https://github.com/ultronozm/tex-continuous.el
+;; URL: https://github.com/ultronozm/auctex-cont-latexmk.el
 ;; Package-Requires: ((emacs "29.3") (auctex "14.0.5"))
 ;; Keywords: tex
 
@@ -26,16 +26,16 @@
 ;; This package provides a minor mode that compiles a LaTeX document
 ;; via latexmk, reporting errors via `flymake'.
 ;;
-;; Use `tex-continuous-toggle' to toggle the minor mode and set up
-;; Flymake.
+;; Use `auctex-cont-latexmk-toggle' to toggle the minor mode and set
+;; up Flymake.
 ;;
 ;; If you want to enable continuous compilation but prefer either not
 ;; to use the Flymake backend or to manage it yourself (e.g., in
 ;; combination with other Flymake backends), then instead use
-;; `tex-continuous-mode' and add #'tex-continuous-flymake to
+;; `auctex-cont-latexmk-mode' and add #'auctex-cont-latexmk-flymake to
 ;; `flymake-diagnostic-functions' when you'd like.
 ;;
-;; Customize the variable `tex-continuous-command' to change the
+;; Customize the variable `auctex-cont-latexmk-command' to change the
 ;; compilation command.
 ;;
 ;; The compilation takes place in a buffer *pvc-filename*, so look
@@ -46,19 +46,19 @@
 (require 'tex)
 (require 'flymake)
 
-(defgroup tex-continuous nil
+(defgroup auctex-cont-latexmk nil
   "Run latexmk continuously, report errors via Flymake."
   :group 'tex)
 
-(defvar tex-continuous-mode)
+(defvar auctex-cont-latexmk-mode)
 
 ;;; Flymake Backend
 
-(defcustom tex-continuous-report-multiple-labels t
+(defcustom auctex-cont-latexmk-report-multiple-labels t
   "Non-nil means report multiple label errors via Flymake."
   :type 'boolean)
 
-(defun tex-continuous--get-help (message)
+(defun auctex-cont-latexmk--get-help (message)
   "Return the AUCTeX help string for MESSAGE."
   (let ((error-alist
          (append TeX-error-description-list
@@ -68,14 +68,14 @@
         (when (string-match (car error) message)
           (throw 'found (cdr error)))))))
 
-(defun tex-continuous-help-at-point ()
+(defun auctex-cont-latexmk-help-at-point ()
   "Display the AUCTeX help for the error at point."
   (interactive)
-  (message "%s" (tex-continuous--get-help (help-at-pt-kbd-string))))
+  (message "%s" (auctex-cont-latexmk--get-help (help-at-pt-kbd-string))))
 
-(defun tex-continuous-process-item (type file line message offset _context
-                                         search-string _line-end bad-box
-                                         _error-point ignore)
+(defun auctex-cont-latexmk-process-item (type file line message offset _context
+                                              search-string _line-end bad-box
+                                              _error-point ignore)
   "Process an error or warning for the current TeX document.
 The arguments are as in `TeX-error-list'.  Return either nil or a
 triple (ERROR-P DESCRIPTION (BEG . END)), where ERROR-P is non-nil if it
@@ -103,7 +103,7 @@ is an error rather than a warning."
                         (cons (point) (1+ (point)))))
                   (flymake-diag-region (current-buffer) (+ line offset)))))
              ((file-equal-p file (TeX-master-output-file "aux"))
-              (and tex-continuous-report-multiple-labels
+              (and auctex-cont-latexmk-report-multiple-labels
                    (string-match-p "multiply defined" message)
                    (not (eq type 'error))
                    (let* ((label (progn
@@ -129,9 +129,9 @@ is an error rather than a warning."
            (replace-regexp-in-string "\n" "" message)
            (cons (1- (point-max)) (point-max))))))
 
-(defun tex-continuous--format-log-buffer ()
+(defun auctex-cont-latexmk--format-log-buffer ()
   "Format the current log buffer by joining lines suitably.
-Adapted from `TeX-format-filter'"
+Adapted from `TeX-format-filter'."
   (goto-char (point-max))
   (while (> (point) (point-min))
     (end-of-line 0)
@@ -143,48 +143,48 @@ Adapted from `TeX-format-filter'"
                                       (char-after (1+ (point)))))))))
       (delete-char 1))))
 
-(defun tex-continuous--error-list (log-file)
+(defun auctex-cont-latexmk--error-list (log-file)
   "Retrieve parsed TeX error list from LOG-FILE."
   (with-temp-buffer
     (insert-file-contents log-file)
-    (tex-continuous--format-log-buffer)
+    (auctex-cont-latexmk--format-log-buffer)
     (TeX-parse-all-errors)
     TeX-error-list))
 
-(defun tex-continuous-process-log ()
+(defun auctex-cont-latexmk-process-log ()
   "Process log file for current LaTeX document.
 Return a list of triples as in the docstring of
-`tex-continuous-process-item'."
+`auctex-cont-latexmk-process-item'."
   (delq nil
         (mapcar (lambda (item)
-                  (apply #'tex-continuous-process-item item))
-                (tex-continuous--error-list (TeX-master-output-file "log")))))
+                  (apply #'auctex-cont-latexmk-process-item item))
+                (auctex-cont-latexmk--error-list (TeX-master-output-file "log")))))
 
-(defvar-local tex-continuous--report-fn nil
+(defvar-local auctex-cont-latexmk--report-fn nil
   "Function provided by Flymake for reporting diagnostics.")
 
-(defvar-local tex-continuous-force-enable nil
+(defvar-local auctex-cont-latexmk-force-enable nil
   "Whether to enable the Flymake backend unconditionally.
 This is non-nil if we should enable the Flymake backend independent of
-whether `tex-continuous-mode' is enabled.  This may be useful for
+whether `auctex-cont-latexmk-mode' is enabled.  This may be useful for
 testing or applying the backend in other contexts, e.g., in the context
 of AUCTeX's built-in compilation functions.")
 
-(defun tex-continuous-flymake (report-fn &rest _args)
+(defun auctex-cont-latexmk-flymake (report-fn &rest _args)
   "Flymake backend for LaTeX based on latexmk.
-Save REPORT-FN in a local variable, called by `tex-continuous--timer' to
-report diagnostics."
-  ;; At present, we check for `tex-continuous-mode' just to avoid
+Save REPORT-FN in a local variable, called by
+`auctex-cont-latexmk--timer' to report diagnostics."
+  ;; At present, we check for `auctex-cont-latexmk-mode' just to avoid
   ;; spamming random buffers with report functions.  Could easily
   ;; replace this with some other check if we wanted to use the
   ;; Flymake backend provided here in other situations.
-  (when (or tex-continuous-mode tex-continuous-force-enable)
-    (setq tex-continuous--report-fn report-fn)))
+  (when (or auctex-cont-latexmk-mode auctex-cont-latexmk-force-enable)
+    (setq auctex-cont-latexmk--report-fn report-fn)))
 
-(defun tex-continuous-send-report ()
+(defun auctex-cont-latexmk-send-report ()
   "Report to the Flymake backend."
   (funcall
-   tex-continuous--report-fn
+   auctex-cont-latexmk--report-fn
    (mapcar
     (lambda (datum)
       (cl-destructuring-bind (error-p description region) datum
@@ -192,18 +192,18 @@ report diagnostics."
          (current-buffer) (car region) (cdr region)
          (if error-p :error :warning)
          description)))
-    (tex-continuous-process-log))))
+    (auctex-cont-latexmk-process-log))))
 
-(defun tex-continuous--clone-indirect-buffer-hook ()
-  "Set `tex-continuous--report-fn' to nil after cloning an indirect buffer.
+(defun auctex-cont-latexmk--clone-indirect-buffer-hook ()
+  "Set `auctex-cont-latexmk--report-fn' to nil after cloning an indirect buffer.
 This should be added to `clone-indirect-buffer-hook' for any buffer in
 which the Flymake backend is used.  This is because we don't want the
 Flymake report function to propagate to indirect buffers."
-  (setq tex-continuous--report-fn nil))
+  (setq auctex-cont-latexmk--report-fn nil))
 
 ;;; Continuous Compilation
 
-(defcustom tex-continuous-command
+(defcustom auctex-cont-latexmk-command
   '("latexmk -pvc -shell-escape -pdf -view=none -e "
     ("$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/"))
   "Command to compile LaTeX documents.
@@ -215,7 +215,7 @@ to a directory (if `TeX-output-dir' is set) and the name of the master
 file."
   :type '(repeat (choice string (repeat string))))
 
-(defun tex-continuous--compilation-command ()
+(defun auctex-cont-latexmk--compilation-command ()
   "Return the command used to compile the current LaTeX document."
   (let ((quote
          (if (memq system-type '(ms-dos windows-nt))
@@ -226,35 +226,35 @@ file."
                   (if (listp item)
                       (concat quote (mapconcat #'identity item) quote)
                     item))
-                tex-continuous-command)
+                auctex-cont-latexmk-command)
      (when TeX-output-dir
        (concat " -outdir=" (shell-quote-argument TeX-output-dir)))
      " "
      (shell-quote-argument (TeX-master-file "tex")))))
 
-(defun tex-continuous--compilation-buffer-name ()
+(defun auctex-cont-latexmk--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
   (let ((master (abbreviate-file-name (expand-file-name (TeX-master-file)))))
     (format "*pvc-%s*" master)))
 
-(defvar-local tex-continuous--compilation-buffer nil
+(defvar-local auctex-cont-latexmk--compilation-buffer nil
   "The buffer used for LaTeX compilation.")
 
-(defconst tex-continuous--watching-str
+(defconst auctex-cont-latexmk--watching-str
   "=== Watching for updated files. Use ctrl/C to stop ..."
   "String indicating that latexmk is watching for updated files.")
 
-(defvar-local tex-continuous--last-update-time nil
+(defvar-local auctex-cont-latexmk--last-update-time nil
   "Time of the last update in the compilation buffer.")
 
-(defun tex-continuous--update-time (_beg _end _len)
+(defun auctex-cont-latexmk--update-time (_beg _end _len)
   "Update the time of the last update in the compilation buffer."
-  (setq tex-continuous--last-update-time (current-time)))
+  (setq auctex-cont-latexmk--last-update-time (current-time)))
 
-(defconst tex-continuous--wait-time 1
+(defconst auctex-cont-latexmk--wait-time 1
   "Time to wait before checking for changes in the log file.")
 
-(defun tex-continuous--fresh-p ()
+(defun auctex-cont-latexmk--fresh-p ()
   "Return non-nil if logged errors should apply to current buffer.
 This is the case if the current buffer is not modified, the current
 buffer is a file, the current buffer has a log file, the log file is
@@ -264,51 +264,51 @@ either in a watching state or has not updated recently."
                (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
               (log-file (TeX-master-output-file "log")))
     (and
-     (when-let ((buf tex-continuous--compilation-buffer))
+     (when-let ((buf auctex-cont-latexmk--compilation-buffer))
        (with-current-buffer buf
          (or
           (progn
             (goto-char (point-max))
             (forward-line -1)
             (equal (buffer-substring (point) (line-end-position))
-                   tex-continuous--watching-str))
+                   auctex-cont-latexmk--watching-str))
           (and (or
-                tex-continuous--last-update-time
+                auctex-cont-latexmk--last-update-time
                 (time-less-p (time-subtract (current-time)
-                                            tex-continuous--last-update-time)
-                             (seconds-to-time tex-continuous--wait-time)))))))
+                                            auctex-cont-latexmk--last-update-time)
+                             (seconds-to-time auctex-cont-latexmk--wait-time)))))))
      (not (buffer-modified-p))
      (file-exists-p file)
      (file-exists-p log-file)
      (time-less-p (nth 5 (file-attributes file))
                   (nth 5 (file-attributes log-file))))))
 
-(defvar tex-continuous--timer nil
+(defvar auctex-cont-latexmk--timer nil
   "Timer for reporting changes to the log file.")
 
-(defun tex-continuous--timer-function ()
+(defun auctex-cont-latexmk--timer-function ()
   "Report to the Flymake backend if the current buffer is fresh."
-  (and tex-continuous-mode
-       tex-continuous--report-fn
-       (tex-continuous--fresh-p)
-       (tex-continuous-send-report)))
+  (and auctex-cont-latexmk-mode
+       auctex-cont-latexmk--report-fn
+       (auctex-cont-latexmk--fresh-p)
+       (auctex-cont-latexmk-send-report)))
 
-(defvar-local tex-continuous--subscribed-buffers nil
+(defvar-local auctex-cont-latexmk--subscribed-buffers nil
   "List of buffers subscribed to the current LaTeX compilation.")
 
-(defun tex-continuous--unsubscribe (&optional nokill)
+(defun auctex-cont-latexmk--unsubscribe (&optional nokill)
   "Unsubscribe from LaTeX compilation if the current buffer is in the list.
 This kills the compilation buffer when its subscriber list becomes
 empty, except when NOKILL is non-nil."
   (let ((buf (current-buffer))
-        (comp-buf tex-continuous--compilation-buffer)
+        (comp-buf auctex-cont-latexmk--compilation-buffer)
         done)
     (when (and comp-buf (buffer-live-p comp-buf))
       (with-current-buffer comp-buf
-        (setq tex-continuous--subscribed-buffers
+        (setq auctex-cont-latexmk--subscribed-buffers
               (seq-remove (lambda (b) (eq b buf))
-                          tex-continuous--subscribed-buffers))
-        (when (null tex-continuous--subscribed-buffers)
+                          auctex-cont-latexmk--subscribed-buffers))
+        (when (null auctex-cont-latexmk--subscribed-buffers)
           (setq done t)))
       (when done
         (let ((process (get-buffer-process comp-buf)))
@@ -319,116 +319,116 @@ empty, except when NOKILL is non-nil."
           (unless nokill
             (kill-buffer comp-buf)))))))
 
-(defvar-local tex-continuous--disable-function nil
-  "Function to disable `tex-continuous' features.
-This will be either `tex-continuous-mode-disable' or
-`tex-continuous-turn-off'.")
+(defvar-local auctex-cont-latexmk--disable-function nil
+  "Function to disable `auctex-cont-latexmk' features.
+This will be either `auctex-cont-latexmk-mode-disable' or
+`auctex-cont-latexmk-turn-off'.")
 
-(defun tex-continuous--disable ()
-  "Disable `tex-continuous' features."
-  (when tex-continuous--disable-function
-    (funcall tex-continuous--disable-function)))
+(defun auctex-cont-latexmk--disable ()
+  "Disable `auctex-cont-latexmk' features."
+  (when auctex-cont-latexmk--disable-function
+    (funcall auctex-cont-latexmk--disable-function)))
 
-(defun tex-continuous--cancel-subscriptions ()
+(defun auctex-cont-latexmk--cancel-subscriptions ()
   "Cancel all subscriptions to LaTeX compilation.
 This is called from the compilation buffer when it is killed."
-  (dolist (buf tex-continuous--subscribed-buffers)
+  (dolist (buf auctex-cont-latexmk--subscribed-buffers)
     (with-current-buffer buf
-      (tex-continuous--disable))))
+      (auctex-cont-latexmk--disable))))
 
-(defun tex-continuous-mode-disable ()
-  "Disable `tex-continuous-mode' in all buffers."
-  (tex-continuous-mode 0))
+(defun auctex-cont-latexmk-mode-disable ()
+  "Disable `auctex-cont-latexmk-mode' in all buffers."
+  (auctex-cont-latexmk-mode 0))
 
 ;;;###autoload
-(define-minor-mode tex-continuous-mode
+(define-minor-mode auctex-cont-latexmk-mode
   "If enabled, run latexmk on the current tex file."
   :lighter nil
   (cond
-   (tex-continuous-mode
+   (auctex-cont-latexmk-mode
     (let ((buf (current-buffer))
-          (comp-buf-name (tex-continuous--compilation-buffer-name)))
-      (if-let ((comp-buf (setq tex-continuous--compilation-buffer
+          (comp-buf-name (auctex-cont-latexmk--compilation-buffer-name)))
+      (if-let ((comp-buf (setq auctex-cont-latexmk--compilation-buffer
                                (get-buffer comp-buf-name))))
           (with-current-buffer comp-buf
-            (push buf tex-continuous--subscribed-buffers))
+            (push buf auctex-cont-latexmk--subscribed-buffers))
         (unless (start-process-shell-command
-                 "tex-continuous"
+                 "auctex-cont-latexmk"
                  comp-buf-name
-                 (tex-continuous--compilation-command))
+                 (auctex-cont-latexmk--compilation-command))
           (error "Failed to start LaTeX compilation"))
-        (with-current-buffer (setq tex-continuous--compilation-buffer
+        (with-current-buffer (setq auctex-cont-latexmk--compilation-buffer
                                    (get-buffer comp-buf-name))
           (special-mode)
-          (add-hook 'after-change-functions #'tex-continuous--update-time nil t)
+          (add-hook 'after-change-functions #'auctex-cont-latexmk--update-time nil t)
           (add-hook 'kill-buffer-hook
-                    #'tex-continuous--cancel-subscriptions nil t)
-          (push buf tex-continuous--subscribed-buffers))))
-    (add-hook 'kill-buffer-hook 'tex-continuous--unsubscribe nil t)
-    (setq tex-continuous--disable-function 'tex-continuous-mode-disable)
-    (add-hook 'after-set-visited-file-name-hook 'tex-continuous--disable nil t)
-    (when tex-continuous--timer
-      (cancel-timer tex-continuous--timer)
-      (setq tex-continuous--timer nil))
-    (setq tex-continuous--timer
-          (run-with-timer 2 1 #'tex-continuous--timer-function)))
+                    #'auctex-cont-latexmk--cancel-subscriptions nil t)
+          (push buf auctex-cont-latexmk--subscribed-buffers))))
+    (add-hook 'kill-buffer-hook 'auctex-cont-latexmk--unsubscribe nil t)
+    (setq auctex-cont-latexmk--disable-function 'auctex-cont-latexmk-mode-disable)
+    (add-hook 'after-set-visited-file-name-hook 'auctex-cont-latexmk--disable nil t)
+    (when auctex-cont-latexmk--timer
+      (cancel-timer auctex-cont-latexmk--timer)
+      (setq auctex-cont-latexmk--timer nil))
+    (setq auctex-cont-latexmk--timer
+          (run-with-timer 2 1 #'auctex-cont-latexmk--timer-function)))
    (t
-    (tex-continuous--unsubscribe)
-    (remove-hook 'kill-buffer-hook 'tex-continuous--unsubscribe t)
-    (remove-hook 'after-set-visited-file-name-hook 'tex-continuous--disable t)
-    (when tex-continuous--report-fn
-      (setq tex-continuous--report-fn nil)))))
+    (auctex-cont-latexmk--unsubscribe)
+    (remove-hook 'kill-buffer-hook 'auctex-cont-latexmk--unsubscribe t)
+    (remove-hook 'after-set-visited-file-name-hook 'auctex-cont-latexmk--disable t)
+    (when auctex-cont-latexmk--report-fn
+      (setq auctex-cont-latexmk--report-fn nil)))))
 
-(defvar-local tex-continuous--saved-flymake-diagnostic-functions nil
+(defvar-local auctex-cont-latexmk--saved-flymake-diagnostic-functions nil
   "Saved value of `flymake-diagnostic-functions'.
-Saved and restored by `tex-continuous-toggle'.")
+Saved and restored by `auctex-cont-latexmk-toggle'.")
 
-(defvar-local tex-continuous--saved-flymake-mode nil
+(defvar-local auctex-cont-latexmk--saved-flymake-mode nil
   "Saved value of `flymake-mode'.
-Saved and restored by `tex-continuous-toggle'.")
+Saved and restored by `auctex-cont-latexmk-toggle'.")
 
-(defcustom tex-continuous-retained-flymake-backends
+(defcustom auctex-cont-latexmk-retained-flymake-backends
   '(eglot-flymake-backend)
-  "Flymake backends to retain when enabling `tex-continuous-mode'."
+  "Flymake backends to retain when enabling `auctex-cont-latexmk-mode'."
   :type 'boolean)
 
-(defun tex-continuous-turn-on ()
-  "Enable `tex-continuous-mode' and set up Flymake."
+(defun auctex-cont-latexmk-turn-on ()
+  "Enable `auctex-cont-latexmk-mode' and set up Flymake."
   (interactive)
-  (tex-continuous-mode 1)
-  (setq tex-continuous--saved-flymake-diagnostic-functions
+  (auctex-cont-latexmk-mode 1)
+  (setq auctex-cont-latexmk--saved-flymake-diagnostic-functions
         flymake-diagnostic-functions)
-  (setq tex-continuous--saved-flymake-mode (if flymake-mode 1 0))
+  (setq auctex-cont-latexmk--saved-flymake-mode (if flymake-mode 1 0))
   (setq-local flymake-diagnostic-functions
               (append
-               '(tex-continuous-flymake)
+               '(auctex-cont-latexmk-flymake)
                (seq-intersection flymake-diagnostic-functions
-                                 tex-continuous-retained-flymake-backends)))
+                                 auctex-cont-latexmk-retained-flymake-backends)))
   (flymake-mode 1)
-  (setq tex-continuous--disable-function 'tex-continuous-turn-off)
+  (setq auctex-cont-latexmk--disable-function 'auctex-cont-latexmk-turn-off)
   (add-hook 'clone-indirect-buffer-hook
-            #'tex-continuous--clone-indirect-buffer-hook nil t)
-  (message "tex-continuous-mode enabled"))
+            #'auctex-cont-latexmk--clone-indirect-buffer-hook nil t)
+  (message "auctex-cont-latexmk-mode enabled"))
 
-(defun tex-continuous-turn-off ()
-  "Disable `tex-continuous-mode' and restore flymake settings."
+(defun auctex-cont-latexmk-turn-off ()
+  "Disable `auctex-cont-latexmk-mode' and restore flymake settings."
   (interactive)
-  (tex-continuous-mode 0)
-  (flymake-mode tex-continuous--saved-flymake-mode)
+  (auctex-cont-latexmk-mode 0)
+  (flymake-mode auctex-cont-latexmk--saved-flymake-mode)
   (remove-hook 'clone-indirect-buffer-hook
-               #'tex-continuous--clone-indirect-buffer-hook t)
+               #'auctex-cont-latexmk--clone-indirect-buffer-hook t)
   (setq-local flymake-diagnostic-functions
-              tex-continuous--saved-flymake-diagnostic-functions)
-  (message "tex-continuous-mode disabled"))
+              auctex-cont-latexmk--saved-flymake-diagnostic-functions)
+  (message "auctex-cont-latexmk-mode disabled"))
 
 ;;;###autoload
-(defun tex-continuous-toggle ()
-  "Toggle `tex-continuous-mode' and its Flymake backend."
+(defun auctex-cont-latexmk-toggle ()
+  "Toggle `auctex-cont-latexmk-mode' and its Flymake backend."
   (interactive)
-  (cond (tex-continuous-mode
-         (tex-continuous-turn-off))
+  (cond (auctex-cont-latexmk-mode
+         (auctex-cont-latexmk-turn-off))
         (t
-         (tex-continuous-turn-on))))
+         (auctex-cont-latexmk-turn-on))))
 
-(provide 'tex-continuous)
-;;; tex-continuous.el ends here
+(provide 'auctex-cont-latexmk)
+;;; auctex-cont-latexmk.el ends here
