@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023, 2024  Free Software Foundation, Inc.
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
-;; Version: 0.1
+;; Version: 0.2
 ;; URL: https://github.com/ultronozm/auctex-cont-latexmk.el
 ;; Package-Requires: ((emacs "29.3") (auctex "14.0.5"))
 ;; Keywords: tex
