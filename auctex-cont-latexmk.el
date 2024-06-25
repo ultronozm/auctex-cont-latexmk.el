@@ -63,10 +63,7 @@
   (let ((error-alist
          (append TeX-error-description-list
                  TeX-error-description-list-local)))
-    (catch 'found
-      (dolist (error error-alist)
-        (when (string-match (car error) message)
-          (throw 'found (cdr error)))))))
+    (alist-get message error-alist nil nil #'string-match-p)))
 
 (defun auctex-cont-latexmk-help-at-point ()
   "Display the AUCTeX help for the error at point."
