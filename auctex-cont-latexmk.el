@@ -275,8 +275,9 @@ recently serves as a workaround."
           (progn
             (goto-char (point-max))
             (forward-line -1)
-            (equal (buffer-substring (point) (line-end-position))
-                   auctex-cont-latexmk--watching-str))
+            (re-search-forward
+             (rx (literal auctex-cont-latexmk--watching-str) (? ?\n) eos)
+             nil t))
           (and (or
                 auctex-cont-latexmk--last-update-time
                 (time-less-p (time-subtract (current-time)
