@@ -151,10 +151,11 @@ Adapted from `TeX-format-filter'."
   "Process log file for current LaTeX document.
 Return a list of triples as in the docstring of
 `auctex-cont-latexmk-process-item'."
-  (delq nil
-        (mapcar (lambda (item)
-                  (apply #'auctex-cont-latexmk-process-item item))
-                (auctex-cont-latexmk--error-list (TeX-master-output-file "log")))))
+  (mapcan
+   (lambda (err)
+     (when-let ((item (apply #'auctex-cont-latexmk-process-item err)))
+       (list item)))
+   (auctex-cont-latexmk--error-list (TeX-master-output-file "log"))))
 
 (defvar-local auctex-cont-latexmk--report-fn nil
   "Function provided by Flymake for reporting diagnostics.")
