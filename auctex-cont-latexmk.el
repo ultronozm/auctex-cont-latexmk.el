@@ -201,7 +201,7 @@ Flymake report function to propagate to indirect buffers."
 ;;; Continuous Compilation
 
 (defcustom auctex-cont-latexmk-command
-  '("latexmk -pvc -shell-escape -pdf -view=none -e "
+  '("latexmk -pvc -pdf -view=none -e "
     ("$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/"))
   "Command to compile LaTeX documents.
 This is a list consisting of strings or lists of strings.  It is
