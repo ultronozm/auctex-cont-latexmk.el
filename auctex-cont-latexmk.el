@@ -78,48 +78,47 @@ The arguments are as in `TeX-error-list'.  Return either nil or a
 triple (ERROR-P DESCRIPTION (BEG . END)), where ERROR-P is non-nil if it
 is an error rather than a warning."
   (or
-   (and
-    (not ignore)
-    (stringp file)
-    (or (not bad-box) TeX-debug-bad-boxes)
-    (when-let
-        ((region
-          (save-restriction
-            (widen)
-            (cond
-             ((file-equal-p
-               file
-               (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
-              (when line
-                (if (eq type 'error)
+   (when-let*
+       (((not ignore))
+        ((stringp file))
+        ((or (not bad-box) TeX-debug-bad-boxes))
+        (region
+         (save-restriction
+           (widen)
+           (cond
+            ((file-equal-p
+              file
+              (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
+             (when line
+               (if (eq type 'error)
+                   (save-excursion
+                     (goto-char (point-min))
+                     (forward-line (+ line offset -1))
+                     (unless (string= search-string " ")
+                       (search-forward search-string nil t)
+                       (cons (point) (1+ (point)))))
+                 (flymake-diag-region (current-buffer) (+ line offset)))))
+            ((file-equal-p file (TeX-master-output-file "aux"))
+             (and auctex-cont-latexmk-report-multiple-labels
+                  (string-match-p "multiply defined" message)
+                  (not (eq type 'error))
+                  (let* ((label (progn
+                                  (string-match "`\\(.*\\)'" message)
+                                  (match-string 1 message)))
+                         (label-re
+                          (concat "\\\\label\\(?:\\[[^]]+\\]\\)?{"
+                                  (regexp-quote label) "}")))
                     (save-excursion
                       (goto-char (point-min))
-                      (forward-line (+ line offset -1))
-                      (unless (string= search-string " ")
-                        (search-forward search-string nil t)
-                        (cons (point) (1+ (point)))))
-                  (flymake-diag-region (current-buffer) (+ line offset)))))
-             ((file-equal-p file (TeX-master-output-file "aux"))
-              (and auctex-cont-latexmk-report-multiple-labels
-                   (string-match-p "multiply defined" message)
-                   (not (eq type 'error))
-                   (let* ((label (progn
-                                   (string-match "`\\(.*\\)'" message)
-                                   (match-string 1 message)))
-                          (label-re
-                           (concat "\\\\label\\(?:\\[[^]]+\\]\\)?{"
-                                   (regexp-quote label) "}")))
-                     (save-excursion
-                       (goto-char (point-min))
-                       (when (re-search-forward label-re nil t)
-                         ;; Return the full line so the diagnostic is
-                         ;; not covered by preview overlays when
-                         ;; \\label appears after \\begin{equation}.
-                         (cons (line-beginning-position)
-                               (line-end-position)))))))))))
-      (list (eq type 'error)
-            (replace-regexp-in-string "\n" "" message)
-            region)))
+                      (when (re-search-forward label-re nil t)
+                        ;; Return the full line so the diagnostic is
+                        ;; not covered by preview overlays when
+                        ;; \\label appears after \\begin{equation}.
+                        (cons (line-beginning-position)
+                              (line-end-position)))))))))))
+     (list (eq type 'error)
+           (replace-regexp-in-string "\n" "" message)
+           region))
    ;; Put errors without file or line at bottom of buffer.
    (when (eq type 'error)
      (list t
