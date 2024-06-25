@@ -131,7 +131,7 @@ Adapted from `TeX-format-filter'."
   (goto-char (point-max))
   (while (not (bobp))
     (end-of-line 0)
-    (when (and (memq (- (point) (line-beginning-position)) '(79 80))
+    (when (and (<= 79 (current-column) 80)
                (not (memq (char-after (1+ (point))) '(?\n ?\()))
                (not (and (eq (char-before) ?.)
                          (char-after (1+ (point)))
