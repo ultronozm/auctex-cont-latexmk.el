@@ -129,7 +129,7 @@ is an error rather than a warning."
   "Format the current log buffer by joining lines suitably.
 Adapted from `TeX-format-filter'."
   (goto-char (point-max))
-  (while (> (point) (point-min))
+  (while (not (bobp))
     (end-of-line 0)
     (when (and (memq (- (point) (line-beginning-position)) '(79 80))
                (not (memq (char-after (1+ (point))) '(?\n ?\()))
