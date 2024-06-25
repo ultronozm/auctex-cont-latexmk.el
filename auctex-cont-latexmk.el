@@ -258,7 +258,13 @@ additional option to output build files to a directory (if
 This is the case if the current buffer is not modified, the current
 buffer is a file, the current buffer has a log file, the log file is
 newer than the current buffer, and the current latexmk compilation is
-either in a watching state or has not updated recently."
+either in a watching state or has not updated recently.
+
+The reason we check if the latexmk has not been updated recently is
+because it seems that on Windows, the latexmk script doesn't always
+display the most recent message.  I haven't been able to debug why this
+is the case.  Checking that the compilation has not been updated
+recently serves as a workaround."
   (when-let* ((file
                (or buffer-file-name (buffer-file-name (buffer-base-buffer))))
               (log-file (TeX-master-output-file "log")))
