@@ -205,11 +205,16 @@ Flymake report function to propagate to indirect buffers."
     ("$pdflatex=q/pdflatex %O -synctex=1 -interaction=nonstopmode %S/"))
   "Command to compile LaTeX documents.
 This is a list consisting of strings or lists of strings.  It is
-compiled to a single string by concatenating the strings and quoting the
-lists, using system-specific quotes.  To produce the compilation
-command, it is combined with an additional option to output build files
-to a directory (if `TeX-output-dir' is set) and the name of the master
-file."
+compiled to a single string by
+
+ - concatenating the strings, and
+
+ - concatenating the contents of each list and quoting the result as a
+shell argument.
+
+To produce the compilation command, the result is combined with an
+additional option to output build files to a directory (if
+`TeX-output-dir' is set) and the name of the master file."
   :type '(repeat (choice string (repeat string))))
 
 (defun auctex-cont-latexmk--compilation-command ()
