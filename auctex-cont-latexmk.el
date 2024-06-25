@@ -219,20 +219,17 @@ additional option to output build files to a directory (if
 
 (defun auctex-cont-latexmk--compilation-command ()
   "Return the command used to compile the current LaTeX document."
-  (let ((quote
-         (if (memq system-type '(ms-dos windows-nt))
-             "\""
-           "'")))
-    (concat
-     (mapconcat (lambda (item)
-                  (if (listp item)
-                      (concat quote (mapconcat #'identity item) quote)
-                    item))
-                auctex-cont-latexmk-command)
-     (when TeX-output-dir
-       (concat " -outdir=" (shell-quote-argument TeX-output-dir)))
-     " "
-     (shell-quote-argument (TeX-master-file "tex")))))
+  (concat
+   (mapconcat
+    (lambda (item)
+      (if (listp item)
+          (shell-quote-argument (mapconcat #'identity item))
+        item))
+    auctex-cont-latexmk-command)
+   (when TeX-output-dir
+     (concat " -outdir=" (shell-quote-argument TeX-output-dir)))
+   " "
+   (shell-quote-argument (TeX-master-file "tex"))))
 
 (defun auctex-cont-latexmk--compilation-buffer-name ()
   "Return the name of the buffer used for LaTeX compilation."
