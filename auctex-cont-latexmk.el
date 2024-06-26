@@ -427,10 +427,9 @@ Saved and restored by `auctex-cont-latexmk-toggle'.")
 (defun auctex-cont-latexmk-toggle ()
   "Toggle `auctex-cont-latexmk-mode' and its Flymake backend."
   (interactive)
-  (cond (auctex-cont-latexmk-mode
-         (auctex-cont-latexmk-turn-off))
-        (t
-         (auctex-cont-latexmk-turn-on))))
+  (if auctex-cont-latexmk-mode
+      (auctex-cont-latexmk-turn-off)
+    (auctex-cont-latexmk-turn-on)))
 
 (provide 'auctex-cont-latexmk)
 ;;; auctex-cont-latexmk.el ends here
