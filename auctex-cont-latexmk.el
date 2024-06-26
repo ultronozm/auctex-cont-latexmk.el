@@ -317,12 +317,8 @@ empty, except when NOKILL is non-nil."
         (when (null auctex-cont-latexmk--subscribed-buffers)
           (setq done t)))
       (when done
-        (let ((process (get-buffer-process comp-buf)))
-          (when (process-live-p process)
-            (interrupt-process process)
-            (sit-for 0.1)
-            (delete-process process))
-          (unless nokill
+        (unless nokill
+          (let ((kill-buffer-query-functions nil)) ; don't ask to kill process
             (kill-buffer comp-buf)))))))
 
 (defvar-local auctex-cont-latexmk--disable-function nil
