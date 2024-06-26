@@ -392,7 +392,7 @@ Saved and restored by `auctex-cont-latexmk-toggle'.")
 (defcustom auctex-cont-latexmk-retained-flymake-backends
   '(eglot-flymake-backend)
   "Flymake backends to retain when enabling `auctex-cont-latexmk-mode'."
-  :type 'boolean)
+  :type '(repeat symbol))
 
 (defun auctex-cont-latexmk-turn-on ()
   "Enable `auctex-cont-latexmk-mode' and set up Flymake."
