@@ -29,7 +29,7 @@ The way the Flymake backend works, it will update only when the latexmk process 
         ("M-p" . flymake-goto-prev-error)))
 #+end_src
 
-I also bind =flymake-show-diagnostics-buffer=, which gives an overview of all errors.  You can find my current setup in [[https://github.com/ultronozm/emacsd/blob/main/init-main.el][my config]].
+I also bind =flymake-show-diagnostics-buffer=, which gives an overview of all errors.  You can find my current setup in [[https://github.com/ultronozm/emacsd/blob/main/init.el][my config]].
 
 That's all.  I prefer this workflow to the alternative in which one compiles the document manually via =TeX-command-master= (=C-c C-c=) and navigates the warning/error messages using =next-error= (=M-n=) and =previous-error= (=M-p=).  It also gives a handy way to keep the .aux files up-to-date; I take advantage of this feature in the packages [[https://github.com/ultronozm/czm-preview.el][czm-preview.el]] and [[https://github.com/ultronozm/czm-tex-fold.el][czm-tex-fold.el]] to annotate the TeX buffer with label numbers.
 
