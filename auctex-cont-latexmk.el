@@ -345,7 +345,7 @@ This is called from the compilation buffer when it is killed."
 ;;;###autoload
 (define-minor-mode auctex-cont-latexmk-mode
   "If enabled, run latexmk on the current tex file."
-  :lighter nil
+  :lighter " ⟲"
   (cond
    (auctex-cont-latexmk-mode
     (let ((buf (current-buffer))
