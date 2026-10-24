@@ -223,7 +223,9 @@ Save REPORT-FN in a local variable, called by
          (current-buffer) (car region) (cdr region)
          (if error-p :error :warning)
          description)))
-    (auctex-cont-latexmk-process-log))))
+    (auctex-cont-latexmk-process-log))
+   ;; Replace, rather than add to, the diagnostics of previous reports.
+   :region (save-restriction (widen) (cons (point-min) (point-max)))))
 
 (defun auctex-cont-latexmk--clone-indirect-buffer-hook ()
   "Set `auctex-cont-latexmk--report-fn' to nil after cloning an indirect buffer.
